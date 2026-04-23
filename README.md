@@ -25,7 +25,7 @@ ORDER BY id ASC LIMIT 100
 
 ```postgres://[username]:[password]@db:5432/aact```
 
-* Store the URL as `DATABASE_URL` in .env
+* Store the URL as `DATABASE_URL` in `.env`
 
 ### Install Python Virtual Environment for dependencies
 
@@ -33,4 +33,11 @@ ORDER BY id ASC LIMIT 100
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+```
+
+### Download tagging dataset (NBCI Disease)
+
+```
+cd clinical-trial-processor
+python3 ncbi_disease_downloader.py
 ```
