@@ -3,8 +3,10 @@ import torch
 import os
 import psycopg2
 
+from constants import DATABASE_URL_KEY
+
 # Connect to db
-db_url = os.environ.get("DATABASE_URL")
+db_url = os.environ.get(DATABASE_URL_KEY)
 conn = psycopg2.connect(db_url)
 cur = conn.cursor()
 

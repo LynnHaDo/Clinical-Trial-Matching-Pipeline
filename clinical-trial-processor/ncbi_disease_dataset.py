@@ -1,6 +1,8 @@
 import torch
 from torch.utils.data import Dataset
 
+from constants import NCBI_DATASET_DATA_FIELDS, NCBI_DATASET_VOCAB_KEYS
+
 class NCBIDataset(Dataset):
     """
     This dataset contains the disease name and concept annotations of the NCBI disease corpus, 
@@ -27,7 +29,7 @@ class NCBIDataset(Dataset):
         example = self.data[idx]
         
         # Convert words to integers
-        token_ids = [self.word_to_ix.get(word, self.word_to_ix["<UNK>"]) for word in example['tokens']]
-        tag_ids = example['ner_tags']
+        token_ids = [self.word_to_ix.get(word, self.word_to_ix[NCBI_DATASET_VOCAB_KEYS.UNKNOWN]) for word in example[NCBI_DATASET_DATA_FIELDS.TOKENS]]
+        tag_ids = example[NCBI_DATASET_DATA_FIELDS.NER_TAGS]
         
         return torch.tensor(token_ids), torch.tensor(tag_ids)

@@ -1,6 +1,10 @@
 from torch.nn.utils.rnn import pad_sequence
 
 def collate_fn(batch):
+    """
+    Make sure that sentences are in the same length
+    """
+    
     sentences = [item[0] for item in batch]
     tags = [item[1] for item in batch]
         

@@ -1,13 +1,15 @@
+import os
 import torch
 import torch.nn as nn
 from torchcrf import CRF
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from datasets import load_dataset
+from datasets import load_from_disk
 
 from utils import collate_fn
 from ncbi_disease_dataset import NCBIDataset
+from constants import NCBI_DATASET_VOCAB_KEYS, NCBI_DATASET_DATA_FIELDS, NCBI_DATASET_TAG_TO_IX, LOCAL_NCBI_DATASET_DISK_PATH, NCBI_DATASET_NEGATION_TRIGGERS, NCBI_DATASET_NEGATION_WINDOW_SIZE, MODEL_PARAMS
 
 class ClinicalTrialEncoder(nn.Module):
     def __init__(self, vocab_size, tagset_size, embedding_dim, hidden_dim):
@@ -63,30 +65,51 @@ class ClinicalTrialEncoder(nn.Module):
     
 class ClinicalTrialEncoderTrainer():
     def __init__(self):
-        self.word_to_ix = {"<PAD>": 0, "<UNK>": 1} # Reserve 0 for padding, 1 for unknown words
-        self.dataset = load_dataset("ncbi_disease")
+        self.word_to_ix = {NCBI_DATASET_VOCAB_KEYS.PADDING: 0, NCBI_DATASET_VOCAB_KEYS.UNKNOWN: 1} # Reserve 0 for padding, 1 for unknown words
+        self.load_dataset_from_disk()
         self.build_vocabulary()
         
         # Define vocabulary of tags
-        self.tag_to_ix = {
-                "O": 0,
-                "B-Disease": 1,
-                "I-Disease": 2,
-                "B-Chemical": 3,
-                "I-Chemical": 4,
-                "B-Neg-Disease": 5,
-                "I-Neg-Disease": 6,
-                "<START_TAG>": 7, # Required by CRF to know where a sequence begins
-                "<STOP_TAG>": 8   # Required by CRF to know where a sequence ends
-        }
+        self.tag_to_ix = NCBI_DATASET_TAG_TO_IX
 
         # Reverse mapping for Inference (Decoding)
         self.ix_to_tag = {v: k for k, v in self.tag_to_ix.items()}
     
+    def load_dataset_from_disk(self):
+        # Load the dataset
+        print("Loading raw NCBI dataset...")
+        local_dataset_path = os.path.abspath(LOCAL_NCBI_DATASET_DISK_PATH)
+        raw_dataset = load_from_disk(local_dataset_path)
+        self.dataset = raw_dataset.map(self._inject_negation)
+        
+    def _inject_negation(self, example):
+        """
+        Add support for negation tags
+        """
+        tokens = [t.lower() for t in example[NCBI_DATASET_DATA_FIELDS.TOKENS]]
+        tags = example[NCBI_DATASET_DATA_FIELDS.NER_TAGS].copy()
+        
+        for i, tag in enumerate(tags):
+            if tag == self.tag_to_ix["B-Disease"]:
+                start_window = max(0, i - NCBI_DATASET_NEGATION_WINDOW_SIZE)
+                window_tokens = tokens[start_window:i]
+                
+                if any(trigger in window_tokens for trigger in NCBI_DATASET_NEGATION_TRIGGERS):
+                    # Flip B-Disease to B-Neg-Disease
+                    tags[i] = self.tag_to_ix['B-Neg-Disease']
+                    
+                    # Change the closing tag
+                    j = i + 1
+                    while j < len(tags) and tags[j] == self.tag_to_ix['I-Disease']:
+                        tags[j] = self.tag_to_ix['I-Neg-Disease']
+                        j += 1
+            
+        return {NCBI_DATASET_DATA_FIELDS.NER_TAGS: tags} # return the mutated tag
+    
     def build_vocabulary(self):
         for split in self.dataset.keys():
             for example in self.dataset[split]:
-                for word in example['tokens']:
+                for word in example[NCBI_DATASET_DATA_FIELDS.TOKENS]:
                     if word not in self.word_to_ix:
                         self.word_to_ix[word] = len(self.word_to_ix)
 
@@ -111,11 +134,12 @@ class ClinicalTrialEncoderTrainer():
             hidden_dim=256
         )
 
-        optimizer = optim.Adam(model.parameters(), lr=0.001)
-        epochs = 10
+        optimizer = optim.Adam(model.parameters(), lr=MODEL_PARAMS.LR)
 
-        for epoch in range(epochs):
+        for epoch in range(MODEL_PARAMS.EPOCHS):
             model.train()
+            total_loss = 0
+            
             for sentences, tags, masks in train_loader:
                 # Clear gradients
                 model.zero_grad()
