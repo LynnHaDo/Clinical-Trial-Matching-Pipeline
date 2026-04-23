@@ -12,7 +12,7 @@ from utils import prepare_sequence, extract_entities
 # ==========================================
 
 # Load the model
-model_path = os.path.abspath(os.path.join(MODEL_PARAMS.WEIGHTS_SAVE_DIR, MODEL_PARAMS.WEIGHTS_NAME))
+model_path = os.path.abspath(os.path.join(MODEL_PARAMS.WEIGHTS_SAVE_DIR.value, MODEL_PARAMS.WEIGHTS_NAME.value))
 content = torch.load(model_path, map_location=torch.device('cpu'))
 
 # Extract the critical dictionaries
@@ -23,8 +23,8 @@ ix_to_tag = {v: k for k, v in tag_to_ix.items()}
 model = ClinicalTrialEncoder(
     vocab_size=len(word_to_ix),
     tag_to_ix_size=len(tag_to_ix),
-    embedding_dim=MODEL_PARAMS.EMBEDDING_DIM,
-    hidden_dim=MODEL_PARAMS.HIDDEN_DIM
+    embedding_dim=MODEL_PARAMS.EMBEDDING_DIM.value,
+    hidden_dim=MODEL_PARAMS.HIDDEN_DIM.value
 )
 
 # Inject the trained weights into the architecture

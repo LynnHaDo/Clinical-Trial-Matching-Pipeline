@@ -5,7 +5,7 @@ from torchcrf import CRF
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from datasets import load_from_disk
+from datasets import load_from_disk, ClassLabel, Sequence
 
 from utils import collate_fn
 from ncbi_disease_dataset import NCBIDataset
@@ -64,30 +64,49 @@ class ClinicalTrialEncoder(nn.Module):
         return best_tag_sequence
     
 class ClinicalTrialEncoderTrainer():
-    def __init__(self):
-        self.word_to_ix = {NCBI_DATASET_VOCAB_KEYS.PADDING: 0, NCBI_DATASET_VOCAB_KEYS.UNKNOWN: 1} # Reserve 0 for padding, 1 for unknown words
-        self.load_dataset_from_disk()
-        self.build_vocabulary()
-        
+    def __init__(self):        
         # Define vocabulary of tags
         self.tag_to_ix = NCBI_DATASET_TAG_TO_IX
 
         # Reverse mapping for Inference (Decoding)
         self.ix_to_tag = {v: k for k, v in self.tag_to_ix.items()}
+        
+        self.word_to_ix = {NCBI_DATASET_VOCAB_KEYS.PADDING.value: 0, NCBI_DATASET_VOCAB_KEYS.UNKNOWN.value: 1} # Reserve 0 for padding, 1 for unknown words
+        self.load_dataset_from_disk()
+        self.build_vocabulary()
     
     def load_dataset_from_disk(self):
+        """
+        Load the original dataset and made changes to allow for extra classes
+        """
         # Load the dataset
         print("Loading raw NCBI dataset...")
         local_dataset_path = os.path.abspath(LOCAL_NCBI_DATASET_DISK_PATH)
         raw_dataset = load_from_disk(local_dataset_path)
-        self.dataset = raw_dataset.map(self._inject_negation)
+        
+        # Fetch the features
+        new_features = raw_dataset['train'].features.copy()
+        
+        # Extract tag names in order of Ids
+        tag_names = [k for k,v in sorted(self.tag_to_ix.items(), key=lambda item: item[1])]
+        
+        # Construct list of features
+        new_features[NCBI_DATASET_DATA_FIELDS.NER_TAGS.value] = Sequence(
+            feature = ClassLabel(num_classes=len(self.tag_to_ix), names=tag_names)
+        )
+        
+        # Inject new classes
+        self.dataset = raw_dataset.map(self._inject_negation, features=new_features)
+        
+        # Filter out empty sequences
+        self.dataset = self.dataset.filter(lambda example: len(example[NCBI_DATASET_DATA_FIELDS.TOKENS.value]) > 0)
         
     def _inject_negation(self, example):
         """
         Add support for negation tags
         """
-        tokens = [t.lower() for t in example[NCBI_DATASET_DATA_FIELDS.TOKENS]]
-        tags = example[NCBI_DATASET_DATA_FIELDS.NER_TAGS].copy()
+        tokens = [t.lower() for t in example[NCBI_DATASET_DATA_FIELDS.TOKENS.value]]
+        tags = example[NCBI_DATASET_DATA_FIELDS.NER_TAGS.value].copy()
         
         for i, tag in enumerate(tags):
             if tag == self.tag_to_ix["B-Disease"]:
@@ -104,12 +123,12 @@ class ClinicalTrialEncoderTrainer():
                         tags[j] = self.tag_to_ix['I-Neg-Disease']
                         j += 1
             
-        return {NCBI_DATASET_DATA_FIELDS.NER_TAGS: tags} # return the mutated tag
+        return {NCBI_DATASET_DATA_FIELDS.NER_TAGS.value: tags} # return the mutated tag
     
     def build_vocabulary(self):
         for split in self.dataset.keys():
             for example in self.dataset[split]:
-                for word in example[NCBI_DATASET_DATA_FIELDS.TOKENS]:
+                for word in example[NCBI_DATASET_DATA_FIELDS.TOKENS.value]:
                     if word not in self.word_to_ix:
                         self.word_to_ix[word] = len(self.word_to_ix)
 
@@ -130,13 +149,13 @@ class ClinicalTrialEncoderTrainer():
         model = ClinicalTrialEncoder(
             vocab_size=len(self.word_to_ix), 
             tagset_size=len(self.tag_to_ix), # This tells the model there are 9 possible classes
-            embedding_dim=MODEL_PARAMS.EMBEDDING_DIM, 
-            hidden_dim=MODEL_PARAMS.HIDDEN_DIM
+            embedding_dim=MODEL_PARAMS.EMBEDDING_DIM.value, 
+            hidden_dim=MODEL_PARAMS.HIDDEN_DIM.value
         )
 
-        optimizer = optim.Adam(model.parameters(), lr=MODEL_PARAMS.LR)
+        optimizer = optim.Adam(model.parameters(), lr=MODEL_PARAMS.LR.value)
 
-        for epoch in range(MODEL_PARAMS.EPOCHS):
+        for epoch in range(int(MODEL_PARAMS.EPOCHS.value)):
             model.train()
             total_loss = 0
             
@@ -156,7 +175,7 @@ class ClinicalTrialEncoderTrainer():
                 
             print(f"Epoch {epoch+1} | Loss: {total_loss/len(train_loader)}")
 
-        save_dir = os.path.abspath(MODEL_PARAMS.WEIGHTS_SAVE_DIR)
+        save_dir = os.path.abspath(MODEL_PARAMS.WEIGHTS_SAVE_DIR.value)
         os.makedirs(save_dir, exist_ok=True)
         
         # Assemble everything
@@ -166,7 +185,7 @@ class ClinicalTrialEncoderTrainer():
             'tag_to_ix': self.tag_to_ix
         }
         
-        save_path = os.path.join(save_dir, MODEL_PARAMS.WEIGHTS_NAME)
+        save_path = os.path.join(save_dir, MODEL_PARAMS.WEIGHTS_NAME.value)
         torch.save(content, save_path)
         
         print(f"Model successfully saved to {save_path}")

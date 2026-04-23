@@ -4,7 +4,7 @@ from constants import NCBI_DATASET_VOCAB_KEYS
 
 def collate_fn(batch):
     """
-    Make sure that sentences are in the same length
+    Make sure that sentences are in the same length (i.e. pad sentences of shorter length)
     """
     
     sentences = [item[0] for item in batch]
@@ -15,7 +15,7 @@ def collate_fn(batch):
     padded_tags = pad_sequence(tags, batch_first=True, padding_value=0) # 0 is the 'O' tag
         
     # Create the mask: 1 for real words, 0 for padding
-    mask = (padded_sentences != 0).byte()
+    mask = (padded_sentences != 0).bool()
         
     return padded_sentences, padded_tags, mask
 
@@ -25,7 +25,7 @@ def prepare_sequence(seq, to_ix):
     """
     # Split text into tokens (in a real pipeline, use a proper tokenizer like spacy)
     tokens = str(seq).split() 
-    idxs = [to_ix.get(w.lower(), to_ix[NCBI_DATASET_VOCAB_KEYS.UNKNOWN]) for w in tokens]
+    idxs = [to_ix.get(w.lower(), to_ix[NCBI_DATASET_VOCAB_KEYS.UNKNOWN.value]) for w in tokens]
     return torch.tensor(idxs, dtype=torch.long)
 
 def extract_entities(text, tags):

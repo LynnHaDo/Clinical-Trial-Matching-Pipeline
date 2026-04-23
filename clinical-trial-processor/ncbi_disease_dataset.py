@@ -29,7 +29,7 @@ class NCBIDataset(Dataset):
         example = self.data[idx]
         
         # Convert words to integers
-        token_ids = [self.word_to_ix.get(word, self.word_to_ix[NCBI_DATASET_VOCAB_KEYS.UNKNOWN]) for word in example[NCBI_DATASET_DATA_FIELDS.TOKENS]]
-        tag_ids = example[NCBI_DATASET_DATA_FIELDS.NER_TAGS]
+        token_ids = [self.word_to_ix.get(word, self.word_to_ix[NCBI_DATASET_VOCAB_KEYS.UNKNOWN.value]) for word in example[NCBI_DATASET_DATA_FIELDS.TOKENS.value]]
+        tag_ids = example[NCBI_DATASET_DATA_FIELDS.NER_TAGS.value]
         
         return torch.tensor(token_ids), torch.tensor(tag_ids)
