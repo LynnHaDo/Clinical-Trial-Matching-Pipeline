@@ -130,8 +130,8 @@ class ClinicalTrialEncoderTrainer():
         model = ClinicalTrialEncoder(
             vocab_size=len(self.word_to_ix), 
             tagset_size=len(self.tag_to_ix), # This tells the model there are 9 possible classes
-            embedding_dim=100, 
-            hidden_dim=256
+            embedding_dim=MODEL_PARAMS.EMBEDDING_DIM, 
+            hidden_dim=MODEL_PARAMS.HIDDEN_DIM
         )
 
         optimizer = optim.Adam(model.parameters(), lr=MODEL_PARAMS.LR)
@@ -155,3 +155,22 @@ class ClinicalTrialEncoderTrainer():
                 total_loss += loss.item()
                 
             print(f"Epoch {epoch+1} | Loss: {total_loss/len(train_loader)}")
+
+        save_dir = os.path.abspath(MODEL_PARAMS.WEIGHTS_SAVE_DIR)
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # Assemble everything
+        content = {
+            'model_state_dict': model.state_dict(),
+            'word_to_ix': self.word_to_ix,
+            'tag_to_ix': self.tag_to_ix
+        }
+        
+        save_path = os.path.join(save_dir, MODEL_PARAMS.WEIGHTS_NAME)
+        torch.save(content, save_path)
+        
+        print(f"Model successfully saved to {save_path}")
+
+if __name__ == "__main__":
+    trainer = ClinicalTrialEncoderTrainer()
+    trainer.train()
