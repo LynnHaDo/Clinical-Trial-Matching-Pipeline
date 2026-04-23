@@ -32,3 +32,7 @@ DATABASE_URL_KEY: Final[str] = "DATABASE_URL"
 class MODEL_PARAMS(Enum):
     LR = 0.001
     EPOCHS = 10
+    EMBEDDING_DIM = 100
+    HIDDEN_DIM = 256
+    WEIGHTS_SAVE_DIR = './models'
+    WEIGHTS_NAME = 'clinical_trial_ner.pt'
