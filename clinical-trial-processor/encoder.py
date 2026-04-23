@@ -2,6 +2,12 @@ import torch
 import torch.nn as nn
 from torchcrf import CRF
 import torch.optim as optim
+from torch.utils.data import DataLoader
+
+from datasets import load_dataset
+
+from utils import collate_fn
+from ncbi_disease_dataset import NCBIDataset
 
 class ClinicalTrialEncoder(nn.Module):
     def __init__(self, vocab_size, tagset_size, embedding_dim, hidden_dim):
@@ -57,6 +63,10 @@ class ClinicalTrialEncoder(nn.Module):
     
 class ClinicalTrialEncoderTrainer():
     def __init__(self):
+        self.word_to_ix = {"<PAD>": 0, "<UNK>": 1} # Reserve 0 for padding, 1 for unknown words
+        self.dataset = load_dataset("ncbi_disease")
+        self.build_vocabulary()
+        
         # Define vocabulary of tags
         self.tag_to_ix = {
                 "O": 0,
@@ -73,20 +83,40 @@ class ClinicalTrialEncoderTrainer():
         # Reverse mapping for Inference (Decoding)
         self.ix_to_tag = {v: k for k, v in self.tag_to_ix.items()}
     
+    def build_vocabulary(self):
+        for split in self.dataset.keys():
+            for example in self.dataset[split]:
+                for word in example['tokens']:
+                    if word not in self.word_to_ix:
+                        self.word_to_ix[word] = len(self.word_to_ix)
+
+        print(f"Total vocabulary size: {len(self.word_to_ix)}")
+    
     def train(self):
+        train_data = NCBIDataset(self.dataset['train'], self.word_to_ix)
+        
+        # Create the data loader
+        train_loader = DataLoader(
+            train_data,
+            batch_size=32,
+            shuffle=True,
+            collate_fn=collate_fn
+        )
+        
+        # Init the model
         model = ClinicalTrialEncoder(
-            vocab_size=len(word_to_ix), 
+            vocab_size=len(self.word_to_ix), 
             tagset_size=len(self.tag_to_ix), # This tells the model there are 9 possible classes
             embedding_dim=100, 
             hidden_dim=256
         )
 
         optimizer = optim.Adam(model.parameters(), lr=0.001)
-        epochs = 30
+        epochs = 10
 
         for epoch in range(epochs):
             model.train()
-            for sentences, tags, masks in dataloader:
+            for sentences, tags, masks in train_loader:
                 # Clear gradients
                 model.zero_grad()
                 
@@ -98,11 +128,6 @@ class ClinicalTrialEncoderTrainer():
                 
                 # Update weights
                 optimizer.step()
-    
-        model.eval()
-        with torch.no_grad():
-            # decode() runs the Viterbi algorithm to find the absolute best path
-            predicted_tags = model.decode(new_patient_sentences, mask=new_masks)
-
-        # predicted_tags might look like: [0, 0, 0, 3, 4, 0] 
-        # which translates back to: ['O', 'O', 'O', 'B-Neg-Disease', 'I-Neg-Disease', 'O']
+                total_loss += loss.item()
+                
+            print(f"Epoch {epoch+1} | Loss: {total_loss/len(train_loader)}")
