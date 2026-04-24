@@ -1,5 +1,8 @@
 .DS_Store
 clinical-trial-processor/datasets
+datasets/
+*.csv
+*.gz
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
