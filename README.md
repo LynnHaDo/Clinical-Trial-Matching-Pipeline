@@ -41,3 +41,9 @@ pip install -r requirements.txt
 cd clinical-trial-processor
 python3 ncbi_disease_downloader.py
 ```
+
+### Download scispaCy models
+```
+pip install scispacy
+pip install en_core_sci_sm
+```
