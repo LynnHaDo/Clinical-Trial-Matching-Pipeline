@@ -1,6 +1,7 @@
 import torch
+import re
 from torch.nn.utils.rnn import pad_sequence
-from constants import NCBI_DATASET_VOCAB_KEYS
+from constants import AACT_DB_NULL_VALUES, NCBI_DATASET_VOCAB_KEYS
 
 def collate_fn(batch):
     """
@@ -57,3 +58,79 @@ def extract_entities(text, tags):
         entities.append({'text': " ".join(current_entity), 'tag': current_tag_type})
         
     return entities
+
+def split_criteria(text):
+    """
+    Splits ClinicalTrials.gov `criteria` entry into inclusion and exclusion strings
+    
+    Returns: a tuple of (inclusion text, exclusion text)
+    """
+    if not text:
+        return "", ""
+    
+    # Look for exclusion criteria and everything after it
+    match = re.search(r'(?i)exclusion criteria[:\-]?\s*(.*)', text, re.DOTALL)
+    
+    if match:
+        exc_text = match.group(1)
+        inc_text = text[:match.start()] # everything before is inclusion criteria
+        inc_text = re.sub(r'(?i)inclusion criteria[:\-]?\s*', '', inc_text)
+        return inc_text, exc_text
+    else:
+        return text, ""
+
+def clean_lines(textblock):
+    """Strips leading special characters (bullets) from block of text"""
+    lines = textblock.split('\n')
+    return [re.sub(r'^[\*\-\+]\s*', '', line.strip()) for line in lines if line]
+
+def normalize_age(age_str):
+    """
+    Extract age (XX Months) from ClinicalTrials.gov `minimum_age`/`maximum_age`
+    
+    Based on documentation from AACT Database:
+    Definition: The numerical value, if any, for the minimum/maximum age a potential participant must meet to be eligible for the clinical study.
+
+    Unit of Time * Select one.
+    
+        Years
+        Months
+        Weeks
+        Days
+        Hours
+        Minutes
+        N/A (No limit)
+    
+    """
+    if not age_str:
+        return None
+        
+    # Clean string and handle known null values
+    age_str = str(age_str).strip().lower()
+    if age_str in AACT_DB_NULL_VALUES:
+        return None
+        
+    # Regex extracts the number (including decimals) and the unit
+    match = re.search(r'([\d\.]+)\s*(years?|months?|weeks?|days?|hours?|minutes?)', age_str)
+    
+    if not match:
+        return None
+        
+    value = float(match.group(1))
+    unit = match.group(2)
+    
+    # Standardize to Months
+    if unit.startswith('year'):
+        return value * 12
+    elif unit.startswith('month'):
+        return value
+    elif unit.startswith('week'):
+        return value / 4.345 
+    elif unit.startswith('day'):
+        return value / 30.437
+    elif unit.startswith('hour'):
+        return value / (30.437 * 24)
+    elif unit.startswith('minute'):
+        return value / (30.437 * 24 * 60)
+        
+    return None

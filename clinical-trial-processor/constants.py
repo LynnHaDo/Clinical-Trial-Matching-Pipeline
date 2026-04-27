@@ -29,6 +29,8 @@ NCBI_DATASET_NEGATION_WINDOW_SIZE = 3 # Consider up to 3 words backwards
 
 DATABASE_URL_KEY: Final[str] = "DATABASE_URL"
 
+AACT_DB_NULL_VALUES: Final[set] = {'n/a (no limit)', 'n/a', 'none', '[null]', 'null'}
+
 class MODEL_PARAMS(Enum):
     LR = 0.001
     EPOCHS = 10
