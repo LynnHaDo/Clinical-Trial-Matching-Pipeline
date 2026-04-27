@@ -1,7 +1,7 @@
 import torch
 import re
 from torch.nn.utils.rnn import pad_sequence
-from constants import AACT_DB_NULL_VALUES, NCBI_DATASET_VOCAB_KEYS
+from constants import AACT_DB_NULL_VALUES, DATASET_VOCAB_KEYS
 
 def collate_fn(batch):
     """
@@ -26,7 +26,7 @@ def prepare_sequence(seq, to_ix):
     """
     # Split text into tokens (in a real pipeline, use a proper tokenizer like spacy)
     tokens = str(seq).split() 
-    idxs = [to_ix.get(w.lower(), to_ix[NCBI_DATASET_VOCAB_KEYS.UNKNOWN.value]) for w in tokens]
+    idxs = [to_ix.get(w.lower(), to_ix[DATASET_VOCAB_KEYS.UNKNOWN.value]) for w in tokens]
     return torch.tensor(idxs, dtype=torch.long)
 
 def extract_entities(text, tags):
@@ -56,6 +56,8 @@ def extract_entities(text, tags):
                 
     if current_entity:
         entities.append({'text': " ".join(current_entity), 'tag': current_tag_type})
+    
+    print(entities)
         
     return entities
 
@@ -134,3 +136,6 @@ def normalize_age(age_str):
         return value / (30.437 * 24 * 60)
         
     return None
+
+def clean_dataset_name(datasetName):
+    return re.sub(r'/', '_', datasetName)
