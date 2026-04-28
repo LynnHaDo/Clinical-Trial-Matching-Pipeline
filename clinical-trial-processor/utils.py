@@ -1,7 +1,7 @@
 import torch
 import re
 from torch.nn.utils.rnn import pad_sequence
-from constants import AACT_DB_NULL_VALUES, DATASET_VOCAB_KEYS
+from constants import AACT_DB_NULL_VALUES, COMMON_DRUG_SUFFIXES, DATASET_VOCAB_KEYS
 
 def collate_fn(batch):
     """
@@ -20,20 +20,23 @@ def collate_fn(batch):
         
     return padded_sentences, padded_tags, mask
 
-def prepare_sequence(seq, to_ix):
+def prepare_sequence(nlp_model, seq, to_ix):
     """
     Converts a text string into a tensor of vocabulary IDs.
     """
-    # Split text into tokens (in a real pipeline, use a proper tokenizer like spacy)
-    tokens = str(seq).split() 
+    if not seq:
+        return torch.tensor([], dtype=torch.long)
+    
+    clean_text = re.sub(r'([.,:;!?()])', r' \1 ', str(seq)) # Add spaces around punctuation
+    doc = nlp_model(clean_text)
+    tokens = [token.text for token in doc]
     idxs = [to_ix.get(w.lower(), to_ix[DATASET_VOCAB_KEYS.UNKNOWN.value]) for w in tokens]
-    return torch.tensor(idxs, dtype=torch.long)
+    return torch.tensor(idxs, dtype=torch.long), tokens
 
-def extract_entities(text, tags):
+def extract_entities(tokens, tags):
     """
     Parses tags back into actual phrases
     """
-    tokens = str(text).split()
     entities = []
     current_entity = []
     current_tag_type = None
@@ -57,7 +60,8 @@ def extract_entities(text, tags):
     if current_entity:
         entities.append({'text': " ".join(current_entity), 'tag': current_tag_type})
     
-    print(entities)
+    for entity in entities:
+        entity['text'] = re.sub(r'[.,:;!?()]', '', entity['text'].strip())
         
     return entities
 
@@ -139,3 +143,47 @@ def normalize_age(age_str):
 
 def clean_dataset_name(datasetName):
     return re.sub(r'/', '_', datasetName)
+
+def is_valid_medical_term(nlp_model, text):
+    """
+    Returns true if the text contains a recognized medical entity
+    """
+    doc = nlp_model(text)
+    return len(doc.ents) > 0
+
+def process_entities_from_text_chunks(text_chunks, nlp_model, word_to_ix, model, ix_to_tag, trial_graph, inclusion=True):
+    for text_chunk in text_chunks:
+        if len(text_chunk.split()) < 2: continue
+            
+        inputs, tokens = prepare_sequence(nlp_model, text_chunk, word_to_ix)
+        mask = torch.ones(1, len(inputs), dtype=torch.bool)
+        with torch.no_grad():
+            predicted_tag_ids = model.decode(inputs.unsqueeze(0), mask)[0]
+            
+        predicted_tags = [ix_to_tag[tag_id] for tag_id in predicted_tag_ids]
+        extracted_entities = extract_entities(tokens, predicted_tags)
+        
+        for entity in extracted_entities:
+            if is_valid_medical_term(nlp_model, entity['text']):
+                tag = entity['tag']
+                text_lower = entity['text'].lower()
+                
+                if tag == 'Disease' and text_lower.endswith(COMMON_DRUG_SUFFIXES):
+                    tag = 'Chemical'
+                elif tag == 'Neg-Disease' and text_lower.endswith(COMMON_DRUG_SUFFIXES):
+                    tag = 'Neg-Chemical'
+                
+                if inclusion:
+                    if tag == 'Disease':
+                        trial_graph["edges"].append({"type": "REQUIRES_CONDITION", "target": entity['text']})
+                    elif tag == 'Chemical':
+                        trial_graph["edges"].append({"type": "REQUIRES_CHEMICAL", "target": entity['text']})
+                    if tag == 'Neg-Disease':
+                        trial_graph["edges"].append({"type": "EXCLUDES_CONDITION", "target": entity['text']})
+                    elif tag == 'Neg-Chemical':
+                        trial_graph["edges"].append({"type": "EXCLUDES_CHEMICAL", "target": entity['text']})
+                else:
+                    if entity['tag'] == 'Disease':
+                        trial_graph["edges"].append({"type": "EXCLUDES_CONDITION", "target": entity['text']}) # any disease found here are excluded
+                    elif entity['tag'] == 'Chemical':
+                        trial_graph["edges"].append({"type": "EXCLUDES_CHEMICAL", "target": entity['text']})

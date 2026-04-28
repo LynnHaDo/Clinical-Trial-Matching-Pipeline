@@ -96,6 +96,7 @@ class ClinicalTrialEncoderTrainer():
         )
 
         optimizer = optim.Adam(model.parameters(), lr=MODEL_PARAMS.LR.value)
+        lines = []
 
         for epoch in range(int(MODEL_PARAMS.EPOCHS.value)):
             model.train()
@@ -115,7 +116,9 @@ class ClinicalTrialEncoderTrainer():
                 optimizer.step()
                 total_loss += loss.item()
                 
-            print(f"Epoch {epoch+1} | Loss: {total_loss/len(train_loader)}")
+            line = f"Epoch {epoch+1} | Loss: {total_loss/len(train_loader)}"
+            print(line)
+            lines.append(f"{line}\n")
 
         save_dir = os.path.abspath(os.path.join(MODEL_PARAMS.WEIGHTS_SAVE_DIR.value, self.dataset.cleanedDatasetName))
         os.makedirs(save_dir, exist_ok=True)
@@ -128,7 +131,10 @@ class ClinicalTrialEncoderTrainer():
         }
         
         save_path = os.path.join(save_dir, MODEL_PARAMS.WEIGHTS_NAME.value)
+        losses_path = os.path.join(save_dir, MODEL_PARAMS.TRAINING_LOSSES_OUTPUT_NAME.value)
         torch.save(content, save_path)
+        with open(losses_path, 'w') as f:
+            f.writelines(lines)
         
         print(f"Model successfully saved to {save_path}")
 

@@ -9,7 +9,7 @@ DATASET_DISK_PATH: Final[str] = './datasets'
 """
 NCBI_DATASET_NAME: Final[str] = "ncbi_disease"
 BC5CDR_DATASET_NAME: Final[str] = "tner/bc5cdr"
-DEFAULT_DATASET: Final[str] = NCBI_DATASET_NAME
+DEFAULT_DATASET: Final[str] = BC5CDR_DATASET_NAME
 
 class DATASET_VOCAB_KEYS(Enum):
     PADDING = "<PAD>",
@@ -63,6 +63,11 @@ DATASET_NEGATION_WINDOW_SIZE = 3 # Consider up to 3 words backwards
 DATABASE_URL_KEY: Final[str] = "DATABASE_URL"
 
 AACT_DB_NULL_VALUES: Final[set] = {'n/a (no limit)', 'n/a', 'none', '[null]', 'null'}
+COMMON_DRUG_SUFFIXES: Final[tuple] = ('ine', 'pam', 'lol', 'mab', 'vir', 'cillin')
+
+POSTGRES_SQL_FETCH_SIZE = 5
+POSTGRES_SQL_CURSOR_NAME = 'fetch_trials_cursor'
+DEFAULT_SPACY_MODEL = 'en_core_sci_sm'
 
 class MODEL_PARAMS(Enum):
     LR = 0.001
@@ -71,3 +76,4 @@ class MODEL_PARAMS(Enum):
     HIDDEN_DIM = 256
     WEIGHTS_SAVE_DIR = './models'
     WEIGHTS_NAME = 'clinical_trial_ner.pt'
+    TRAINING_LOSSES_OUTPUT_NAME = 'clinical_trial_ner_losses.pt'
