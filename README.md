@@ -34,10 +34,12 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
+## Training
 
-### Download tagging dataset (NBCI Disease)
+### Clinical Trials BIO Tagging
+
+In `clinical-trial-processor` folder:
 
 ```
-cd clinical-trial-processor
-python3 ncbi_disease_downloader.py
+python3 encoder.py
 ```
