@@ -27,6 +27,14 @@ ORDER BY id ASC LIMIT 100
 
 * Store the URL as `DATABASE_URL` in `.env`
 
+### Install MIMIC IV patient notes
+
+We obtained the copy of [MIMIC-IV-Note: Deidentified free-text clinical notes](https://physionet.org/content/mimic-iv-note/2.2/) from PhysioNet. Once you have access to data, make a copy of `discharge.csv` to `medical-transcription-processor/datasets`. Then run:
+
+```
+python3 load_mimic_to_postgres.py
+```
+
 ### Install Python Virtual Environment for dependencies
 
 ```
