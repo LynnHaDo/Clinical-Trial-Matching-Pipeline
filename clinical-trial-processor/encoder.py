@@ -4,6 +4,7 @@ import torch.nn as nn
 from torchcrf import CRF
 import torch.optim as optim
 from torch.utils.data import DataLoader
+from seqeval.metrics import classification_report
 
 from utils import collate_fn
 from constants import MODEL_PARAMS, DEFAULT_DATASET
@@ -65,6 +66,7 @@ class ClinicalTrialEncoderTrainer():
     def __init__(self, datasetName):       
         self.datasetName = datasetName 
         self.dataset = BIOTaggingDataset(datasetName)
+        self.save_dir = os.path.abspath(os.path.join(MODEL_PARAMS.WEIGHTS_SAVE_DIR.value, self.dataset.cleanedDatasetName))
         
         # Define vocabulary of tags
         self.tag_to_ix = self.dataset.tagToIx
@@ -75,6 +77,7 @@ class ClinicalTrialEncoderTrainer():
         self.word_to_ix = self.dataset.wordToIx
         self.dataFields = self.dataset.dataFields
         self.trainData = self.dataset.trainData
+        self.testData = self.dataset.testData
     
     def train(self):
         train_data = self.trainData
@@ -120,8 +123,7 @@ class ClinicalTrialEncoderTrainer():
             print(line)
             lines.append(f"{line}\n")
 
-        save_dir = os.path.abspath(os.path.join(MODEL_PARAMS.WEIGHTS_SAVE_DIR.value, self.dataset.cleanedDatasetName))
-        os.makedirs(save_dir, exist_ok=True)
+        os.makedirs(self.save_dir, exist_ok=True)
         
         # Assemble everything
         content = {
@@ -130,14 +132,72 @@ class ClinicalTrialEncoderTrainer():
             'tag_to_ix': self.tag_to_ix
         }
         
-        save_path = os.path.join(save_dir, MODEL_PARAMS.WEIGHTS_NAME.value)
-        losses_path = os.path.join(save_dir, MODEL_PARAMS.TRAINING_LOSSES_OUTPUT_NAME.value)
+        save_path = os.path.join(self.save_dir, MODEL_PARAMS.WEIGHTS_NAME.value)
+        losses_path = os.path.join(self.save_dir, MODEL_PARAMS.TRAINING_LOSSES_OUTPUT_NAME.value)
         torch.save(content, save_path)
         with open(losses_path, 'w') as f:
             f.writelines(lines)
         
         print(f"Model successfully saved to {save_path}")
+    
+    def evaluate(self):
+        test_data = self.testData
+        
+        # Create test data loader
+        test_loader = DataLoader(
+            test_data,
+            batch_size=32,
+            shuffle=False,
+            collate_fn=collate_fn
+        )
+        
+        model_path = os.path.join(self.save_dir, MODEL_PARAMS.WEIGHTS_NAME.value)
+        
+        if not os.path.exists(model_path):
+            print(f"Model path {model_path} does not exist. Please make sure the model is stored in the designated directory.")
+            return
+        
+        model = ClinicalTrialEncoder(
+            vocab_size=len(self.word_to_ix), 
+            tagset_size=len(self.tag_to_ix), # This tells the model there are 9 possible classes
+            embedding_dim=MODEL_PARAMS.EMBEDDING_DIM.value, 
+            hidden_dim=MODEL_PARAMS.HIDDEN_DIM.value
+        )
+        
+        # Load the weights saved
+        content = torch.load(model_path, map_location=torch.device('cpu'))
+        model.load_state_dict(content['model_state_dict'])
+        model.eval() # Lock model to turn off dropout/gradients
+        
+        all_true_tags = []
+        all_pred_tags = []
+        
+        with torch.no_grad():
+            for sentences, tags, masks in test_loader:
+                predicted_tag_ids = model.decode(sentences, masks) # tag ids
+                
+                # Convert ids back to string tags
+                for i in range(len(sentences)):
+                    seq_len = masks[i].sum().item() # length of actual sentence (without pads)
+
+                    true_ids = tags[i][:seq_len].tolist()
+                    pred_ids = predicted_tag_ids[i]
+                    
+                    true_tags = [self.ix_to_tag[tag_id] for tag_id in true_ids]
+                    pred_tags = [self.ix_to_tag[tag_id] for tag_id in pred_ids]
+                    
+                    all_true_tags.append(true_tags)
+                    all_pred_tags.append(pred_tags)
+                
+        print("\n--- Model Evaluation Results ---\n")
+        report = classification_report(all_true_tags, all_pred_tags, zero_division=0)
+        print(report)
+        report_path = os.path.join(self.save_dir, MODEL_PARAMS.TRAINING_REPORT_OUTPUT_NAME.value)
+        with open(report_path, 'w') as f:
+            f.writelines(report)
+        
 
 if __name__ == "__main__":
     trainer = ClinicalTrialEncoderTrainer(DEFAULT_DATASET)
     trainer.train()
+    trainer.evaluate()

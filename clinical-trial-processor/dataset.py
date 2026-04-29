@@ -39,6 +39,7 @@ class BIOTaggingDataset():
         self.load_dataset_from_disk()
         self.build_vocabulary()
         self.trainData = self.TorchDataset(self.dataset['train'], self.wordToIx, self.dataFields)
+        self.testData = self.TorchDataset(self.dataset['test'], self.wordToIx, self.dataFields)
     
     def download(self):
         print("Downloading and loading BIO Tagging disease/medication dataset...")
