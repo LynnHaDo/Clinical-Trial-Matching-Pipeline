@@ -50,3 +50,9 @@ python3 encoder.py
 ```
 python3 process.py
 ```
+
+### Download scispaCy models
+```
+pip install scispacy
+pip install en_core_sci_sm
+```
