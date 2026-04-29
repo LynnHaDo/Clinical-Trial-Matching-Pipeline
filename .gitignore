@@ -1,5 +1,6 @@
 .DS_Store
 clinical-trial-processor/datasets
+clinical-trial-processor/models
 datasets/
 *.csv
 *.gz

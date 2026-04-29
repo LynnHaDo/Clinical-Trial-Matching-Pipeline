@@ -2,17 +2,20 @@ import json
 import torch
 import os
 import psycopg2
+import spacy
 
-from constants import DATABASE_URL_KEY, MODEL_PARAMS
+from constants import DATABASE_URL_KEY, MODEL_PARAMS, DEFAULT_DATASET, DEFAULT_SPACY_MODEL, POSTGRES_SQL_FETCH_SIZE
 from encoder import ClinicalTrialEncoder
-from utils import prepare_sequence, extract_entities
+from utils import classify_gender_description, normalize_age, process_entities_from_text_chunks, split_criteria, clean_lines, clean_dataset_name
+
+from dotenv import load_dotenv
 
 # ==========================================
 # Load model
 # ==========================================
 
 # Load the model
-model_path = os.path.abspath(os.path.join(MODEL_PARAMS.WEIGHTS_SAVE_DIR, MODEL_PARAMS.WEIGHTS_NAME))
+model_path = os.path.abspath(os.path.join(MODEL_PARAMS.WEIGHTS_SAVE_DIR.value, clean_dataset_name(DEFAULT_DATASET), MODEL_PARAMS.WEIGHTS_NAME.value))
 content = torch.load(model_path, map_location=torch.device('cpu'))
 
 # Extract the critical dictionaries
@@ -22,9 +25,9 @@ ix_to_tag = {v: k for k, v in tag_to_ix.items()}
 
 model = ClinicalTrialEncoder(
     vocab_size=len(word_to_ix),
-    tag_to_ix_size=len(tag_to_ix),
-    embedding_dim=MODEL_PARAMS.EMBEDDING_DIM,
-    hidden_dim=MODEL_PARAMS.HIDDEN_DIM
+    tagset_size=len(tag_to_ix),
+    embedding_dim=MODEL_PARAMS.EMBEDDING_DIM.value,
+    hidden_dim=MODEL_PARAMS.HIDDEN_DIM.value
 )
 
 # Inject the trained weights into the architecture
@@ -34,9 +37,16 @@ model.load_state_dict(content['model_state_dict'])
 model.eval()
 print("Model loaded and locked for inference.")
 
+# Load Spacy model
+print("Load sciSpacy model...")
+nlp = spacy.load(DEFAULT_SPACY_MODEL)
+print(f"Done loading sciSpacy {DEFAULT_SPACY_MODEL}")
+
 # ==========================================
 # Connect to db and set up schema
 # ==========================================
+
+load_dotenv()
 
 # Connect to db
 db_url = os.environ.get(DATABASE_URL_KEY)
@@ -47,7 +57,7 @@ print("Connected to PostgreSQL. Checking schema...")
 
 cur.execute("""
             ALTER TABLE ctgov.eligibilities
-            ADD COLUMN IF NOT EXISTS extracted_graph JSONB
+            ADD COLUMN IF NOT EXISTS extracted_graph JSONB;
             """)
 conn.commit()
 print("Schema ready!")
@@ -56,75 +66,74 @@ print("Schema ready!")
 # Execution loop
 # ==========================================
 
-print("Fetching trials...")
-# Fetch the trials where the population text hasn't been processed yet
-cur.execute("""
-            SELECT 
-                id, nct_id, minimum_age, maximum_age, population, 
-                criteria, adult, child, older_adult 
-            FROM ctgov.eligibilities 
-            WHERE (population IS NOT NULL OR criteria IS NOT NULL)
-            AND extracted_graph IS NULL
-            LIMIT 100;
-            """)
-trials = cur.fetchall()
-print(f"Found {len(trials)} trials to process.")
+BATCH_SIZE = POSTGRES_SQL_FETCH_SIZE
+print("Starting chunked processing...")
 
-for trial in trials:
-    record_id, nct_id, min_age, max_age, population_text, criteria_text, adult, child, older_adult = trial
+while True:
+    cur.execute(f"""
+        SELECT id, minimum_age, maximum_age, healthy_volunteers, gender, gender_description, gender_based, criteria FROM ctgov.eligibilities WHERE criteria IS NOT NULL AND extracted_graph IS NOT NULL LIMIT {BATCH_SIZE};
+    """)
     
-    trial_graph = {
-        "nodes": [],
-        "edges": []
-    }
+    trials = cur.fetchall()
     
-    # Add the bool columns as structured edges
-    if min_age: trial_graph["edges"].append({"type": "HAS_MIN_AGE", "target": min_age})
-    if max_age: trial_graph["edges"].append({"type": "HAS_MAX_AGE", "target": max_age})
-    if adult is not None: trial_graph["edges"].append({"type": "ACCEPTS_ADULTS", "target": adult})
-    if child is not None: trial_graph["edges"].append({"type": "ACCEPTS_CHILDREN", "target": child})
-    if older_adult is not None: trial_graph["edges"].append({"type": "ACCEPTS_OLDER_ADULTS", "target": older_adult})
-    
-    # Combine the unstructured text
-    # We use 'or ""' to handle None types safely
-    raw_unstructured_texts = []
-    if population_text:
-        raw_unstructured_texts.append(population_text)
-    if criteria_text:
-        # Split criteria by newlines
-        criteria_lines = [line.strip() for line in criteria_text.split('\n') if line.strip()]
-        raw_unstructured_texts.extend(criteria_lines)
-    
-    # Process the text chunk by chunk
-    for text_chunk in raw_unstructured_texts:
-        # Skip weirdly short artifacts
-        if len(text_chunk.split()) < 2:
-            continue
+    # If the database returns 0 rows, we are done.
+    if not trials:
+        print("No more unprocessed trials found. Pipeline complete!")
+        break
+        
+    print(f"--- Processing new batch of {len(trials)} trials ---")
+    for trial in trials:
+        record_id, min_age, max_age, is_healthy, gender, gender_desc, is_gender_based, criteria_text = trial
+        
+        trial_graph = {
+            "nodes": [],
+            "edges": []
+        }
+        
+        if min_age: 
+            age = normalize_age(min_age)
+            if age:
+                trial_graph["edges"].append({"type": "HAS_MIN_AGE", "target": age})
             
-        inputs = prepare_sequence(text_chunk, word_to_ix)
-        mask = torch.ones(1, len(inputs), dtype=torch.uint8)
+        if max_age:
+            age = normalize_age(max_age) 
+            if age:
+                trial_graph["edges"].append({"type": "HAS_MAX_AGE", "target": age})
         
-        with torch.no_grad():
-            predicted_tag_ids = model.decode(inputs.unsqueeze(0), mask)[0]
+        # Add the bool columns as structured edges
+        if is_healthy is not None: trial_graph["edges"].append({"type": "REQUIRES_HEALTHY_PATIENTS", "target": is_healthy})
+        if is_gender_based: 
+            if gender is not None:
+                trial_graph["edges"].append({"type": "REQUIRES_GENDER_IDENTITY", "target": gender.lower()})
+            
+            if gender_desc is not None:
+                demographics = classify_gender_description(gender_desc)
+                
+                if demographics["requires_pregnancy"]:
+                    trial_graph["edges"].append({"type": "REQUIRES_PREGNANCY", "target": True})
+                    
+                if demographics["target_sex_at_birth"]:
+                    trial_graph["edges"].append({"type": "REQUIRES_BIOLOGICAL_SEX", "target": demographics["target_sex_at_birth"]})
+                    
+                if demographics["requires_hysterectomy"]:
+                    trial_graph["edges"].append({"type": "REQUIRES_PRIOR_PROCEDURE", "target": "total abdominal hysterectomy"})
         
-        predicted_tags = [ix_to_tag[tag_id] for tag_id in predicted_tag_ids]
-        extracted_entities = extract_entities(text_chunk, predicted_tags)
+        # Process inclusions & exc
+        inc_text, exc_text = split_criteria(criteria_text)
+        cleaned_inc_text, cleaned_exc_text = clean_lines(inc_text), clean_lines(exc_text)
         
-        # Add the dynamically extracted NLP edges
-        for entity in extracted_entities:
-            if entity['tag'] == 'Disease':
-                trial_graph["edges"].append({"type": "REQUIRES_CONDITION", "target": entity['text']})
-            elif entity['tag'] == 'Neg-Disease':
-                trial_graph["edges"].append({"type": "EXCLUDES_CONDITION", "target": entity['text']})
+        process_entities_from_text_chunks(cleaned_inc_text, nlp, word_to_ix, model, ix_to_tag, trial_graph)
+        process_entities_from_text_chunks(cleaned_exc_text, nlp, word_to_ix, model, ix_to_tag, trial_graph, False)
 
-    # Save the fully enriched graph back to Postgres
-    cur.execute(
-        "UPDATE ctgov.eligibilities SET extracted_graph = %s WHERE id = %s",
-        (json.dumps(trial_graph), record_id)
-    )
+        # Save the graph back to Postgres
+        cur.execute(
+            "UPDATE ctgov.eligibilities SET extracted_graph = %s WHERE id = %s;",
+            (json.dumps(trial_graph), record_id)
+        )
 
-# Commit changes to the db
-conn.commit()
+    # Commit changes to the db
+    conn.commit()
+    
 cur.close()
 conn.close()
 print("Processing complete.")
