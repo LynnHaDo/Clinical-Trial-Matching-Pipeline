@@ -38,8 +38,15 @@ pip install -r requirements.txt
 
 ### Clinical Trials BIO Tagging
 
-In `clinical-trial-processor` folder:
+1. Train the model:
 
 ```
+cd clinical-trial-processor
 python3 encoder.py
+```
+
+2. Update the database with extracted graph info:
+
+```
+python3 process.py
 ```
