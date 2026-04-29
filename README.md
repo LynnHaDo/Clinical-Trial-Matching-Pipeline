@@ -38,12 +38,14 @@ pip install -r requirements.txt
 
 ### Clinical Trials BIO Tagging
 
-1. Train the model:
+1. Train the model and view results:
 
 ```
 cd clinical-trial-processor
 python3 encoder.py
 ```
+
+A new model will be saved in either `models`, directory `ncbi_disease` or `tner_bc5cdr` based on your default database (can set in `constants.py`), along with the losses and evaluation.
 
 2. Update the database with extracted graph info:
 

@@ -9,7 +9,7 @@ DATASET_DISK_PATH: Final[str] = './datasets'
 """
 NCBI_DATASET_NAME: Final[str] = "ncbi_disease"
 BC5CDR_DATASET_NAME: Final[str] = "tner/bc5cdr"
-DEFAULT_DATASET: Final[str] = BC5CDR_DATASET_NAME
+DEFAULT_DATASET: Final[str] = NCBI_DATASET_NAME
 
 class DATASET_VOCAB_KEYS(Enum):
     PADDING = "<PAD>",
@@ -71,12 +71,13 @@ DEFAULT_SPACY_MODEL = 'en_core_sci_sm'
 
 class MODEL_PARAMS(Enum):
     LR = 0.001
-    EPOCHS = 20
+    EPOCHS = 25
     EMBEDDING_DIM = 100
     HIDDEN_DIM = 256
     WEIGHTS_SAVE_DIR = './models'
     WEIGHTS_NAME = 'clinical_trial_ner.pt'
-    TRAINING_LOSSES_OUTPUT_NAME = 'clinical_trial_ner_losses.pt'
+    TRAINING_LOSSES_OUTPUT_NAME = 'clinical_trial_ner_losses.txt'
+    TRAINING_REPORT_OUTPUT_NAME = 'clinical_trial_ner_eval.txt'
 
 class SEX_AT_BIRTH(Enum):
     FEMALE = 'Female'

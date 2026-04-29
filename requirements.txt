@@ -67,6 +67,7 @@ rich==15.0.0
 scikit-learn==1.6.1
 scipy==1.13.1
 scispacy==0.6.2
+seqeval==1.2.2
 shellingham==1.5.4
 six==1.17.0
 smart-open==6.4.0
