@@ -4,9 +4,9 @@ import os
 import psycopg2
 import spacy
 
-from constants import DATABASE_URL_KEY, MODEL_PARAMS, DEFAULT_DATASET, DEFAULT_SPACY_MODEL, POSTGRES_SQL_CURSOR_NAME, POSTGRES_SQL_FETCH_SIZE
+from constants import DATABASE_URL_KEY, MODEL_PARAMS, DEFAULT_DATASET, DEFAULT_SPACY_MODEL, POSTGRES_SQL_FETCH_SIZE
 from encoder import ClinicalTrialEncoder
-from utils import normalize_age, process_entities_from_text_chunks, split_criteria, clean_lines, clean_dataset_name, is_valid_medical_term
+from utils import classify_gender_description, normalize_age, process_entities_from_text_chunks, split_criteria, clean_lines, clean_dataset_name
 
 from dotenv import load_dotenv
 
@@ -71,7 +71,7 @@ print("Starting chunked processing...")
 
 while True:
     cur.execute(f"""
-        SELECT id, minimum_age, maximum_age, healthy_volunteers, gender_description, gender_based, criteria FROM ctgov.eligibilities WHERE criteria IS NOT NULL AND extracted_graph IS NULL LIMIT {BATCH_SIZE};
+        SELECT id, minimum_age, maximum_age, healthy_volunteers, gender, gender_description, gender_based, criteria FROM ctgov.eligibilities WHERE criteria IS NOT NULL AND extracted_graph IS NOT NULL LIMIT {BATCH_SIZE};
     """)
     
     trials = cur.fetchall()
@@ -83,7 +83,7 @@ while True:
         
     print(f"--- Processing new batch of {len(trials)} trials ---")
     for trial in trials:
-        record_id, min_age, max_age, is_healthy, gender_desc, is_gender_based, criteria_text = trial
+        record_id, min_age, max_age, is_healthy, gender, gender_desc, is_gender_based, criteria_text = trial
         
         trial_graph = {
             "nodes": [],
@@ -102,9 +102,21 @@ while True:
         
         # Add the bool columns as structured edges
         if is_healthy is not None: trial_graph["edges"].append({"type": "REQUIRES_HEALTHY_PATIENTS", "target": is_healthy})
-        if is_gender_based is not None: trial_graph["edges"].append({"type": "IS_GENDER_BASED", "target": is_gender_based})
-        if gender_desc is not None:
-            pass # TODO
+        if is_gender_based: 
+            if gender is not None:
+                trial_graph["edges"].append({"type": "REQUIRES_GENDER_IDENTITY", "target": gender.lower()})
+            
+            if gender_desc is not None:
+                demographics = classify_gender_description(gender_desc)
+                
+                if demographics["requires_pregnancy"]:
+                    trial_graph["edges"].append({"type": "REQUIRES_PREGNANCY", "target": True})
+                    
+                if demographics["target_sex_at_birth"]:
+                    trial_graph["edges"].append({"type": "REQUIRES_BIOLOGICAL_SEX", "target": demographics["target_sex_at_birth"]})
+                    
+                if demographics["requires_hysterectomy"]:
+                    trial_graph["edges"].append({"type": "REQUIRES_PRIOR_PROCEDURE", "target": "total abdominal hysterectomy"})
         
         # Process inclusions & exc
         inc_text, exc_text = split_criteria(criteria_text)

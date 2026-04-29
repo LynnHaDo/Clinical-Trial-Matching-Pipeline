@@ -65,7 +65,7 @@ DATABASE_URL_KEY: Final[str] = "DATABASE_URL"
 AACT_DB_NULL_VALUES: Final[set] = {'n/a (no limit)', 'n/a', 'none', '[null]', 'null'}
 COMMON_DRUG_SUFFIXES: Final[tuple] = ('ine', 'pam', 'lol', 'mab', 'vir', 'cillin')
 
-POSTGRES_SQL_FETCH_SIZE = 5
+POSTGRES_SQL_FETCH_SIZE = 100
 POSTGRES_SQL_CURSOR_NAME = 'fetch_trials_cursor'
 DEFAULT_SPACY_MODEL = 'en_core_sci_sm'
 
@@ -77,3 +77,8 @@ class MODEL_PARAMS(Enum):
     WEIGHTS_SAVE_DIR = './models'
     WEIGHTS_NAME = 'clinical_trial_ner.pt'
     TRAINING_LOSSES_OUTPUT_NAME = 'clinical_trial_ner_losses.pt'
+
+class SEX_AT_BIRTH(Enum):
+    FEMALE = 'Female'
+    MALE = 'Male'
+    BOTH = 'Both'

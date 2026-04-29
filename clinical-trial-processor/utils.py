@@ -1,7 +1,7 @@
 import torch
 import re
 from torch.nn.utils.rnn import pad_sequence
-from constants import AACT_DB_NULL_VALUES, COMMON_DRUG_SUFFIXES, DATASET_VOCAB_KEYS
+from constants import AACT_DB_NULL_VALUES, COMMON_DRUG_SUFFIXES, DATASET_VOCAB_KEYS, SEX_AT_BIRTH
 
 def collate_fn(batch):
     """
@@ -60,10 +60,17 @@ def extract_entities(tokens, tags):
     if current_entity:
         entities.append({'text': " ".join(current_entity), 'tag': current_tag_type})
     
+    cleaned_entities = []
+    
     for entity in entities:
-        entity['text'] = re.sub(r'[.,:;!?()]', '', entity['text'].strip())
+        cleaned_text = re.sub(r'[.,:;!?()；，。！？（）]', '', entity['text']).strip()
         
-    return entities
+        # Only keep the entity if there are actual words left after stripping
+        if len(cleaned_text) > 0:
+            entity['text'] = cleaned_text
+            cleaned_entities.append(entity)
+            
+    return cleaned_entities
 
 def split_criteria(text):
     """
@@ -187,3 +194,38 @@ def process_entities_from_text_chunks(text_chunks, nlp_model, word_to_ix, model,
                         trial_graph["edges"].append({"type": "EXCLUDES_CONDITION", "target": entity['text']}) # any disease found here are excluded
                     elif entity['tag'] == 'Chemical':
                         trial_graph["edges"].append({"type": "EXCLUDES_CHEMICAL", "target": entity['text']})
+
+def classify_gender_description(gender_desc):
+    """
+    Parses AACT gender_description text into strict demographic buckets.
+    Returns a dictionary of extracted demographic requirements.
+    """
+    buckets = {
+        "requires_pregnancy": False,
+        "target_sex_at_birth": None, # 'Female', 'Male', or 'Both'
+        "requires_hysterectomy": False
+    }
+    
+    if not gender_desc:
+        return buckets
+    
+    text_lower = str(gender_desc).lower()
+    
+    # Pregnancy Buckets
+    if re.search(r'\b(pregnan|maternal)\b', text_lower):
+        buckets["requires_pregnancy"] = True
+        
+    # Sex at Birth Buckets
+    if re.search(r'\b(sex assigned at birth|biological sex)\b', text_lower):
+        if "female" in text_lower or "woman" in text_lower:
+            buckets["target_sex_at_birth"] = SEX_AT_BIRTH.FEMALE.value
+        elif "male" in text_lower or "man" in text_lower:
+            buckets["target_sex_at_birth"] = SEX_AT_BIRTH.MALE.value
+             
+    # Edge Cases (e.g., surgery dependencies)
+    if "hysterectomy" in text_lower:
+        buckets["requires_hysterectomy"] = True
+        # Implicitly requires biological female anatomy
+        buckets["target_sex_at_birth"] = SEX_AT_BIRTH.FEMALE.value
+
+    return buckets
