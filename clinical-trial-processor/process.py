@@ -4,7 +4,7 @@ import os
 import psycopg2
 import spacy
 
-from constants import DATABASE_URL_KEY, MODEL_PARAMS, DEFAULT_DATASET, DEFAULT_SPACY_MODEL, POSTGRES_SQL_FETCH_SIZE
+from constants import DATABASE_URL_KEY, MODEL_PARAMS, DEFAULT_DATASET, DEFAULT_SPACY_MODEL, POSTGRES_SQL_FETCH_SIZE, SCISPACY_LINKER_NAME
 from encoder import ClinicalTrialEncoder
 from utils import classify_gender_description, normalize_age, process_entities_from_text_chunks, split_criteria, clean_lines, clean_dataset_name
 
@@ -40,7 +40,10 @@ print("Model loaded and locked for inference.")
 # Load Spacy model
 print("Load sciSpacy model...")
 nlp = spacy.load(DEFAULT_SPACY_MODEL)
-print(f"Done loading sciSpacy {DEFAULT_SPACY_MODEL}")
+
+# Add the UMLS Linker to the pipeline
+nlp.add_pipe(SCISPACY_LINKER_NAME, config={"resolve_abbreviations": True, "linker_name": "umls"})
+print(f"Done loading sciSpacy {DEFAULT_SPACY_MODEL} and UMLS")
 
 # ==========================================
 # Connect to db and set up schema
@@ -58,6 +61,8 @@ print("Connected to PostgreSQL. Checking schema...")
 cur.execute("""
             ALTER TABLE ctgov.eligibilities
             ADD COLUMN IF NOT EXISTS extracted_graph JSONB;
+            UPDATE ctgov.eligibilities 
+            SET extracted_graph = NULL;
             """)
 conn.commit()
 print("Schema ready!")
@@ -71,7 +76,7 @@ print("Starting chunked processing...")
 
 while True:
     cur.execute(f"""
-        SELECT id, minimum_age, maximum_age, healthy_volunteers, gender, gender_description, gender_based, criteria FROM ctgov.eligibilities WHERE criteria IS NOT NULL AND extracted_graph IS NOT NULL LIMIT {BATCH_SIZE};
+        SELECT id, minimum_age, maximum_age, healthy_volunteers, gender, gender_description, gender_based, criteria FROM ctgov.eligibilities WHERE criteria IS NOT NULL AND extracted_graph IS NULL AND gender_description IS NOT NULL LIMIT {BATCH_SIZE};
     """)
     
     trials = cur.fetchall()

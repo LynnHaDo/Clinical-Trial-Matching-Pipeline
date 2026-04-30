@@ -9,7 +9,7 @@ DATASET_DISK_PATH: Final[str] = './datasets'
 """
 NCBI_DATASET_NAME: Final[str] = "ncbi_disease"
 BC5CDR_DATASET_NAME: Final[str] = "tner/bc5cdr"
-DEFAULT_DATASET: Final[str] = NCBI_DATASET_NAME
+DEFAULT_DATASET: Final[str] = BC5CDR_DATASET_NAME
 
 class DATASET_VOCAB_KEYS(Enum):
     PADDING = "<PAD>",
@@ -68,6 +68,15 @@ COMMON_DRUG_SUFFIXES: Final[tuple] = ('ine', 'pam', 'lol', 'mab', 'vir', 'cillin
 POSTGRES_SQL_FETCH_SIZE = 100
 POSTGRES_SQL_CURSOR_NAME = 'fetch_trials_cursor'
 DEFAULT_SPACY_MODEL = 'en_core_sci_sm'
+# Semantic Type Identifiers (TUIs) that are relevant to clinical trials
+TARGET_TUIS = {
+    'T047': 'Disease', # Disease or Syndrome (e.g., asthma)
+    'T121': 'Chemical', # Pharmacologic Substance (e.g., aspirin)
+    'T061': 'Procedure', # Therapeutic or Preventive Procedure (e.g., abdominal surgery)
+    'T033': 'Observation',  # Finding (e.g., body mass index, ASA score)
+    'T074': 'Device' # Medical Device (e.g., PCA device, pacemaker)
+}
+SCISPACY_LINKER_NAME = 'scispacy_linker'
 
 class MODEL_PARAMS(Enum):
     LR = 0.001

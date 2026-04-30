@@ -10,7 +10,7 @@ blis==0.7.11
 catalogue==2.0.10
 certifi==2026.4.22
 charset-normalizer==3.4.7
-click==8.1.8
+click==8.3.3
 cloudpathlib==0.23.0
 confection==0.1.5
 conllu==6.0.0
@@ -18,11 +18,13 @@ cymem==2.0.13
 datasets==4.5.0
 dill==0.3.7
 dotenv==0.9.9
-en_core_sci_sm @ https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.1/en_core_sci_sm-0.5.1.tar.gz#sha256=8588289f761488021e096e8a7ebbdad52acc0e74685e602c5d0d0b7a5fa546a3
+en_core_sci_sm @ https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/en_core_sci_sm-0.5.4.tar.gz#sha256=a54a114ee11dab7cf6db8cf69ef485145011537f45f3c16c71338c48fd6f070b
+en_ner_bc5cdr_md @ https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/en_ner_bc5cdr_md-0.5.4.tar.gz#sha256=ffc73130a710edf851206199720cb2c744a043e032f5da6ba4bb36863deca778
 exceptiongroup==1.3.1
 filelock==3.19.1
 frozenlist==1.8.0
 fsspec==2023.10.0
+greenlet==3.5.0
 h11==0.16.0
 hf-xet==1.4.3
 httpcore==1.0.9
@@ -41,6 +43,7 @@ multiprocess==0.70.15
 murmurhash==1.0.15
 networkx==3.2.1
 nmslib==2.1.2
+nmslib-metabrainz==2.1.3
 numpy==1.26.4
 packaging==26.1
 pandas==2.3.3
@@ -49,6 +52,7 @@ pathy==0.11.0
 pillow==11.3.0
 preshed==3.0.13
 propcache==0.4.1
+psutil==7.2.2
 psycopg2-binary==2.9.12
 pyarrow==21.0.0
 pyarrow-hotfix==0.7
@@ -65,26 +69,27 @@ PyYAML==6.0.3
 requests==2.32.5
 rich==15.0.0
 scikit-learn==1.6.1
-scipy==1.13.1
+scipy==1.14.1
 scispacy==0.6.2
 seqeval==1.2.2
+setuptools==82.0.1
 shellingham==1.5.4
 six==1.17.0
 smart-open==6.4.0
-spacy==3.4.4
+spacy==3.7.5
 spacy-legacy==3.0.12
 spacy-loggers==1.0.5
+SQLAlchemy==2.0.49
 srsly==2.5.3
 sympy==1.14.0
-thinc==8.1.12
+thinc==8.2.5
 threadpoolctl==3.6.0
-torch==2.8.0
-torchaudio==2.8.0
-torchvision==0.23.0
+torch==2.2.2
+torchaudio==2.2.2
+torchvision==0.17.2
 tqdm==4.67.3
-typer==0.7.0
-typer-slim==0.23.2
-typing-inspection==0.4.2
+typer==0.25.0
+typer-slim==0.24.0
 typing_extensions==4.15.0
 tzdata==2026.1
 urllib3==2.6.3
