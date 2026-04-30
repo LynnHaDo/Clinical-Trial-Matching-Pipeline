@@ -1,7 +1,8 @@
 import torch
 import re
 from torch.nn.utils.rnn import pad_sequence
-from constants import AACT_DB_NULL_VALUES, COMMON_DRUG_SUFFIXES, DATASET_VOCAB_KEYS, SEX_AT_BIRTH
+from scispacy.linking import EntityLinker
+from constants import AACT_DB_NULL_VALUES, DATASET_VOCAB_KEYS, SCISPACY_LINKER_NAME, SEX_AT_BIRTH, TARGET_TUIS
 
 def collate_fn(batch):
     """
@@ -61,14 +62,18 @@ def extract_entities(tokens, tags):
         entities.append({'text': " ".join(current_entity), 'tag': current_tag_type})
     
     cleaned_entities = []
+    unique_entities_texts = set()
     
     for entity in entities:
         cleaned_text = re.sub(r'[.,:;!?()；，。！？（）]', '', entity['text']).strip()
         
         # Only keep the entity if there are actual words left after stripping
         if len(cleaned_text) > 0:
+            if cleaned_text in unique_entities_texts:
+                continue
             entity['text'] = cleaned_text
             cleaned_entities.append(entity)
+            unique_entities_texts.add(cleaned_text)
             
     return cleaned_entities
 
@@ -151,12 +156,31 @@ def normalize_age(age_str):
 def clean_dataset_name(datasetName):
     return re.sub(r'/', '_', datasetName)
 
-def is_valid_medical_term(nlp_model, text):
+def get_umls_semantic_type(nlp_model, text):
     """
-    Returns true if the text contains a recognized medical entity
+    Checks if a text chunk matches a recognized UMLS concept and returns its semantic category
     """
     doc = nlp_model(text)
-    return len(doc.ents) > 0
+    
+    if not doc.ents:
+        return None
+    
+    linker = nlp_model.get_pipe(SCISPACY_LINKER_NAME)
+    
+    ent = doc.ents[0]
+    
+    if not ent._.kb_ents:
+        return None
+    
+    best_semantic_class = ent._.kb_ents[0][0] # best UMLS match
+    concept = linker.kb.cui_to_entity[best_semantic_class]
+    
+    # A concept can have several semantic types. Check if any match the target
+    for tui in concept.types:
+        if tui in TARGET_TUIS:
+            return TARGET_TUIS[tui]
+        
+    return None
 
 def process_entities_from_text_chunks(text_chunks, nlp_model, word_to_ix, model, ix_to_tag, trial_graph, inclusion=True):
     for text_chunk in text_chunks:
@@ -171,29 +195,40 @@ def process_entities_from_text_chunks(text_chunks, nlp_model, word_to_ix, model,
         extracted_entities = extract_entities(tokens, predicted_tags)
         
         for entity in extracted_entities:
-            if is_valid_medical_term(nlp_model, entity['text']):
+            semantic_type = get_umls_semantic_type(nlp_model, entity['text'])
+            
+            if semantic_type is not None:
                 tag = entity['tag']
                 text_lower = entity['text'].lower()
                 
-                if tag == 'Disease' and text_lower.endswith(COMMON_DRUG_SUFFIXES):
-                    tag = 'Chemical'
-                elif tag == 'Neg-Disease' and text_lower.endswith(COMMON_DRUG_SUFFIXES):
-                    tag = 'Neg-Chemical'
-                
                 if inclusion:
-                    if tag == 'Disease':
-                        trial_graph["edges"].append({"type": "REQUIRES_CONDITION", "target": entity['text']})
-                    elif tag == 'Chemical':
-                        trial_graph["edges"].append({"type": "REQUIRES_CHEMICAL", "target": entity['text']})
                     if tag == 'Neg-Disease':
-                        trial_graph["edges"].append({"type": "EXCLUDES_CONDITION", "target": entity['text']})
+                        trial_graph["edges"].append({"type": "EXCLUDES_CONDITION", "target": text_lower})
                     elif tag == 'Neg-Chemical':
-                        trial_graph["edges"].append({"type": "EXCLUDES_CHEMICAL", "target": entity['text']})
+                        trial_graph["edges"].append({"type": "EXCLUDES_CHEMICAL", "target": text_lower})
+                    
+                    elif semantic_type == 'Disease':
+                         trial_graph["edges"].append({"type": "REQUIRES_CONDITION", "target": text_lower})
+                    elif semantic_type == 'Chemical':
+                         trial_graph["edges"].append({"type": "REQUIRES_CHEMICAL", "target": text_lower})
+                    elif semantic_type == 'Procedure':
+                         trial_graph["edges"].append({"type": "REQUIRES_PROCEDURE", "target": text_lower})
+                    elif semantic_type == 'Observation':
+                         trial_graph["edges"].append({"type": "REQUIRES_OBSERVATION", "target": text_lower})
+                    elif semantic_type == 'Device':
+                         trial_graph["edges"].append({"type": "REQUIRES_DEVICE", "target": text_lower})
+                    
                 else:
-                    if entity['tag'] == 'Disease':
-                        trial_graph["edges"].append({"type": "EXCLUDES_CONDITION", "target": entity['text']}) # any disease found here are excluded
-                    elif entity['tag'] == 'Chemical':
-                        trial_graph["edges"].append({"type": "EXCLUDES_CHEMICAL", "target": entity['text']})
+                    if semantic_type == 'Disease':
+                        trial_graph["edges"].append({"type": "EXCLUDES_CONDITION", "target": text_lower})
+                    elif semantic_type == 'Chemical':
+                        trial_graph["edges"].append({"type": "EXCLUDES_CHEMICAL", "target": text_lower})
+                    elif semantic_type == 'Procedure':
+                         trial_graph["edges"].append({"type": "EXCLUDES_PROCEDURE", "target": text_lower})
+                    elif semantic_type == 'Observation':
+                         trial_graph["edges"].append({"type": "EXCLUDES_OBSERVATION", "target": text_lower})
+                    elif semantic_type == 'Device':
+                         trial_graph["edges"].append({"type": "EXCLUDES_DEVICE", "target": text_lower})
 
 def classify_gender_description(gender_desc):
     """
