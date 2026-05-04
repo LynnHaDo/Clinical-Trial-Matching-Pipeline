@@ -49,8 +49,7 @@ pip install -r requirements.txt
 1. Train the model and view results:
 
 ```
-cd clinical-trial-processor
-python3 encoder.py
+python3 clinical_trial_processor.encoder
 ```
 
 A new model will be saved in either `models`, directory `ncbi_disease` or `tner_bc5cdr` based on your default database (can set in `constants.py`), along with the losses and evaluation.
@@ -58,12 +57,17 @@ A new model will be saved in either `models`, directory `ncbi_disease` or `tner_
 2. Update the database with extracted graph info:
 
 ```
-python3 process.py
+python3 -m clinical_trial_processor.process
 ```
 
 3. Embed non-boolean edges using ClinicalBERT
 
 ```
-cd ..
 python3 -m clinical_trial_processor.embed
+```
+
+## Run the matching algorithm
+
+```
+python3 main.py [some_test_json_file]
 ```
