@@ -3,6 +3,7 @@ clinical_trial_processor/models
 datasets/
 *.csv
 *.gz
+*.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
