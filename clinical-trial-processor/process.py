@@ -4,7 +4,7 @@ import os
 import psycopg2
 import spacy
 
-from constants import DATABASE_URL_KEY, MODEL_PARAMS, DEFAULT_DATASET, DEFAULT_SPACY_MODEL, POSTGRES_SQL_FETCH_SIZE, SCISPACY_LINKER_NAME
+from constants import DATABASE_URL_KEY, MODEL_PARAMS, DEFAULT_DATASET, DEFAULT_SPACY_MODEL, POSTGRES_SQL_FETCH_SIZE, POSTGRES_MAX_PROCESSING_SIZE, SCISPACY_LINKER_NAME
 from encoder import ClinicalTrialEncoder
 from utils import classify_gender_description, normalize_age, process_entities_from_text_chunks, split_criteria, clean_lines, clean_dataset_name
 
@@ -60,9 +60,14 @@ print("Connected to PostgreSQL. Checking schema...")
 
 cur.execute("""
             ALTER TABLE ctgov.eligibilities
-            ADD COLUMN IF NOT EXISTS extracted_graph JSONB;
-            UPDATE ctgov.eligibilities 
-            SET extracted_graph = NULL;
+            ADD COLUMN IF NOT EXISTS extracted_graph JSONB,
+            ADD COLUMN IF NOT EXISTS min_age_months FLOAT,
+            ADD COLUMN IF NOT EXISTS max_age_months FLOAT;
+            """)
+# Create index for faster range look up
+cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_trial_age_ranges
+            ON ctgov.eligibilities (min_age_months, max_age_months);
             """)
 conn.commit()
 print("Schema ready!")
@@ -72,11 +77,12 @@ print("Schema ready!")
 # ==========================================
 
 BATCH_SIZE = POSTGRES_SQL_FETCH_SIZE
+count = 0
 print("Starting chunked processing...")
 
-while True:
+while count < POSTGRES_MAX_PROCESSING_SIZE:
     cur.execute(f"""
-        SELECT id, minimum_age, maximum_age, healthy_volunteers, gender, gender_description, gender_based, criteria FROM ctgov.eligibilities WHERE criteria IS NOT NULL AND extracted_graph IS NULL AND gender_description IS NOT NULL LIMIT {BATCH_SIZE};
+        SELECT id, minimum_age, maximum_age, gender_description, gender_based, criteria FROM ctgov.eligibilities WHERE extracted_graph IS NOT NULL LIMIT {BATCH_SIZE};
     """)
     
     trials = cur.fetchall()
@@ -88,40 +94,28 @@ while True:
         
     print(f"--- Processing new batch of {len(trials)} trials ---")
     for trial in trials:
-        record_id, min_age, max_age, is_healthy, gender, gender_desc, is_gender_based, criteria_text = trial
+        record_id, min_age, max_age, gender_desc, is_gender_based, criteria_text = trial
         
         trial_graph = {
             "nodes": [],
             "edges": []
         }
         
-        if min_age: 
-            age = normalize_age(min_age)
-            if age:
-                trial_graph["edges"].append({"type": "HAS_MIN_AGE", "target": age})
-            
-        if max_age:
-            age = normalize_age(max_age) 
-            if age:
-                trial_graph["edges"].append({"type": "HAS_MAX_AGE", "target": age})
+        min_age_months = normalize_age(min_age) if min_age else None
+        max_age_months = normalize_age(max_age) if max_age else None
         
         # Add the bool columns as structured edges
-        if is_healthy is not None: trial_graph["edges"].append({"type": "REQUIRES_HEALTHY_PATIENTS", "target": is_healthy})
-        if is_gender_based: 
-            if gender is not None:
-                trial_graph["edges"].append({"type": "REQUIRES_GENDER_IDENTITY", "target": gender.lower()})
-            
+        if is_gender_based:             
             if gender_desc is not None:
                 demographics = classify_gender_description(gender_desc)
                 
-                if demographics["requires_pregnancy"]:
-                    trial_graph["edges"].append({"type": "REQUIRES_PREGNANCY", "target": True})
+                trial_graph["edges"].append({"type": "REQUIRES_PREGNANCY", "target": demographics["requires_pregnancy"]})
                     
                 if demographics["target_sex_at_birth"]:
                     trial_graph["edges"].append({"type": "REQUIRES_BIOLOGICAL_SEX", "target": demographics["target_sex_at_birth"]})
                     
-                if demographics["requires_hysterectomy"]:
-                    trial_graph["edges"].append({"type": "REQUIRES_PRIOR_PROCEDURE", "target": "total abdominal hysterectomy"})
+                for procedure in demographics["requires_procedures"]:
+                    trial_graph["edges"].append({"type": "REQUIRES_PRIOR_PROCEDURE", "target": procedure})
         
         # Process inclusions & exc
         inc_text, exc_text = split_criteria(criteria_text)
@@ -131,13 +125,19 @@ while True:
         process_entities_from_text_chunks(cleaned_exc_text, nlp, word_to_ix, model, ix_to_tag, trial_graph, False)
 
         # Save the graph back to Postgres
-        cur.execute(
-            "UPDATE ctgov.eligibilities SET extracted_graph = %s WHERE id = %s;",
-            (json.dumps(trial_graph), record_id)
+        cur.execute("""
+            UPDATE ctgov.eligibilities 
+            SET 
+                extracted_graph = %s,
+                min_age_months = %s,
+                max_age_months = %s
+            WHERE id = %s;
+            """, (json.dumps(trial_graph), min_age_months, max_age_months, record_id)
         )
 
     # Commit changes to the db
     conn.commit()
+    count += BATCH_SIZE
     
 cur.close()
 conn.close()
