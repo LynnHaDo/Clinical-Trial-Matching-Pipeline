@@ -1,3 +1,4 @@
+accelerate==1.13.0
 aiohappyeyeballs==2.6.1
 aiohttp==3.13.5
 aiosignal==1.4.0
@@ -29,7 +30,7 @@ h11==0.16.0
 hf-xet==1.4.3
 httpcore==1.0.9
 httpx==0.28.1
-huggingface_hub==1.8.0
+huggingface_hub==0.36.2
 idna==3.13
 Jinja2==3.1.6
 joblib==1.5.3
@@ -66,8 +67,10 @@ python-dotenv==1.2.1
 pytorch-crf==0.7.2
 pytz==2026.1.post1
 PyYAML==6.0.3
+regex==2026.4.4
 requests==2.32.5
 rich==15.0.0
+safetensors==0.7.0
 scikit-learn==1.6.1
 scipy==1.14.1
 scispacy==0.6.2
@@ -84,10 +87,12 @@ srsly==2.5.3
 sympy==1.14.0
 thinc==8.2.5
 threadpoolctl==3.6.0
+tokenizers==0.20.3
 torch==2.2.2
 torchaudio==2.2.2
 torchvision==0.17.2
 tqdm==4.67.3
+transformers==4.46.3
 typer==0.25.0
 typer-slim==0.24.0
 typing_extensions==4.15.0

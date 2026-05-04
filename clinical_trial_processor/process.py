@@ -4,9 +4,9 @@ import os
 import psycopg2
 import spacy
 
-from constants import DATABASE_URL_KEY, MODEL_PARAMS, DEFAULT_DATASET, DEFAULT_SPACY_MODEL, POSTGRES_SQL_FETCH_SIZE, POSTGRES_MAX_PROCESSING_SIZE, SCISPACY_LINKER_NAME
-from encoder import ClinicalTrialEncoder
-from utils import classify_gender_description, normalize_age, process_entities_from_text_chunks, split_criteria, clean_lines, clean_dataset_name
+from clinical_trial_processor.constants import DATABASE_URL_KEY, MODEL_PARAMS, DEFAULT_DATASET, DEFAULT_SPACY_MODEL, POSTGRES_SQL_FETCH_SIZE, POSTGRES_MAX_PROCESSING_SIZE, SCISPACY_LINKER_NAME
+from clinical_trial_processor.encoder import ClinicalTrialEncoder
+from clinical_trial_processor.utils import classify_gender_description, normalize_age, process_entities_from_text_chunks, split_criteria, clean_lines, clean_dataset_name
 
 from dotenv import load_dotenv
 

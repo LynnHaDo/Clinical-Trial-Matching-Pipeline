@@ -2,7 +2,7 @@ import torch
 import re
 from torch.nn.utils.rnn import pad_sequence
 from scispacy.linking import EntityLinker
-from constants import AACT_DB_NULL_VALUES, DATASET_VOCAB_KEYS, SCISPACY_LINKER_NAME, SEX_AT_BIRTH, TARGET_TUIS, SEX_SPECIFIC_PROCEDURES
+from clinical_trial_processor.constants import AACT_DB_NULL_VALUES, DATASET_VOCAB_KEYS, SCISPACY_LINKER_NAME, SEX_AT_BIRTH, TARGET_TUIS, SEX_SPECIFIC_PROCEDURES
 
 def collate_fn(batch):
     """

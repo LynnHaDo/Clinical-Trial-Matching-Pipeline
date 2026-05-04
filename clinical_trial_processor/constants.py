@@ -96,6 +96,8 @@ TARGET_TUIS: Final[dict] = {
     'T074': 'Device' # Medical Device (e.g., PCA device, pacemaker)
 }
 SCISPACY_LINKER_NAME: Final[str] = 'scispacy_linker'
+CLINICAL_TRIALS_SEMANTIC_CRITERIA_TABLE_NAME: Final[str] = "clinical_trials_semantic_criteria"
+CRITERIA_BOOLEAN_EDGE_TYPES: Final[set] = {"REQUIRES_PREGNANCY", "REQUIRES_BIOLOGICAL_SEX"}
 
 class MODEL_PARAMS(Enum):
     LR = 0.001

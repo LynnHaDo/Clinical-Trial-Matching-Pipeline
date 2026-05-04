@@ -6,9 +6,9 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from seqeval.metrics import classification_report
 
-from utils import collate_fn
-from constants import MODEL_PARAMS, DEFAULT_DATASET
-from dataset import BIOTaggingDataset
+from clinical_trial_processor.utils import collate_fn
+from clinical_trial_processor.constants import MODEL_PARAMS, DEFAULT_DATASET
+from clinical_trial_processor.dataset import BIOTaggingDataset
 
 class ClinicalTrialEncoder(nn.Module):
     def __init__(self, vocab_size, tagset_size, embedding_dim, hidden_dim):

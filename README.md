@@ -61,8 +61,9 @@ A new model will be saved in either `models`, directory `ncbi_disease` or `tner_
 python3 process.py
 ```
 
-### Download scispaCy models
+3. Embed non-boolean edges using ClinicalBERT
+
 ```
-pip install scispacy
-pip install en_core_sci_sm
+cd ..
+python3 -m clinical_trial_processor.embed
 ```
