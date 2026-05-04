@@ -2,7 +2,7 @@ import torch
 import re
 from torch.nn.utils.rnn import pad_sequence
 from scispacy.linking import EntityLinker
-from constants import AACT_DB_NULL_VALUES, DATASET_VOCAB_KEYS, SCISPACY_LINKER_NAME, SEX_AT_BIRTH, TARGET_TUIS
+from clinical_trial_processor.constants import AACT_DB_NULL_VALUES, DATASET_VOCAB_KEYS, SCISPACY_LINKER_NAME, SEX_AT_BIRTH, TARGET_TUIS, SEX_SPECIFIC_PROCEDURES
 
 def collate_fn(batch):
     """
@@ -238,7 +238,7 @@ def classify_gender_description(gender_desc):
     buckets = {
         "requires_pregnancy": False,
         "target_sex_at_birth": None, # 'Female', 'Male', or 'Both'
-        "requires_hysterectomy": False
+        "requires_procedures": []
     }
     
     if not gender_desc:
@@ -247,20 +247,35 @@ def classify_gender_description(gender_desc):
     text_lower = str(gender_desc).lower()
     
     # Pregnancy Buckets
-    if re.search(r'\b(pregnan|maternal)\b', text_lower):
+    if not bool(re.search(r'\b(not|negative|never-pregnant|non-pregnant|non-pregnancy)\b', text_lower)) and bool(re.search(r'\b(pregnant|pregnancy|nursing|lactating|breastfeeding)\b', text_lower)):
         buckets["requires_pregnancy"] = True
         
     # Sex at Birth Buckets
-    if re.search(r'\b(sex assigned at birth|biological sex)\b', text_lower):
-        if "female" in text_lower or "woman" in text_lower:
+    if re.search(r'(sex|at birth|biologic)', text_lower):
+        is_female = bool(re.search(r'\bfemale[s]?\b|\bwoman\b|\bwomen\b', text_lower))
+        is_male = bool(re.search(r'\bmale[s]?\b|\bman\b|\bmen\b', text_lower))
+        if is_female and is_male:
+            buckets["target_sex_at_birth"] = SEX_AT_BIRTH.BOTH.value
+        elif is_female:
             buckets["target_sex_at_birth"] = SEX_AT_BIRTH.FEMALE.value
-        elif "male" in text_lower or "man" in text_lower:
+        elif is_male:
             buckets["target_sex_at_birth"] = SEX_AT_BIRTH.MALE.value
              
     # Edge Cases (e.g., surgery dependencies)
-    if "hysterectomy" in text_lower:
-        buckets["requires_hysterectomy"] = True
-        # Implicitly requires biological female anatomy
-        buckets["target_sex_at_birth"] = SEX_AT_BIRTH.FEMALE.value
+    for surgery in SEX_SPECIFIC_PROCEDURES['female']:
+        if bool(re.search(surgery.lower, text_lower)):
+            buckets['requires_procedures'].append(surgery)
+            if buckets['target_sex_at_birth'] != SEX_AT_BIRTH.BOTH.value:
+                buckets['target_sex_at_birth'] = SEX_AT_BIRTH.FEMALE.value
+    
+    for surgery in SEX_SPECIFIC_PROCEDURES['male']:
+        if bool(re.search(surgery.lower, text_lower)):
+            buckets['requires_procedures'].append(surgery)
+            if buckets['target_sex_at_birth'] != SEX_AT_BIRTH.BOTH.value:
+                buckets['target_sex_at_birth'] = SEX_AT_BIRTH.MALE.value
+    
+    for surgery in SEX_SPECIFIC_PROCEDURES['both']:
+        if bool(re.search(surgery.lower, text_lower)):
+            buckets['requires_procedures'].append(surgery)
 
     return buckets

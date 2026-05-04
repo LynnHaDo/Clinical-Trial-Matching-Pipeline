@@ -65,18 +65,39 @@ DATABASE_URL_KEY: Final[str] = "DATABASE_URL"
 AACT_DB_NULL_VALUES: Final[set] = {'n/a (no limit)', 'n/a', 'none', '[null]', 'null'}
 COMMON_DRUG_SUFFIXES: Final[tuple] = ('ine', 'pam', 'lol', 'mab', 'vir', 'cillin')
 
-POSTGRES_SQL_FETCH_SIZE = 100
-POSTGRES_SQL_CURSOR_NAME = 'fetch_trials_cursor'
-DEFAULT_SPACY_MODEL = 'en_core_sci_sm'
+SEX_SPECIFIC_PROCEDURES: Final[dict] = {
+    "female": [
+        "hysterectomy",     # Uterus
+        "oophorectomy",     # Ovaries
+        "salpingectomy",    # Fallopian tubes
+        "vaginectomy",      # Vagina
+        "vulvectomy"        # Vulva
+    ],
+    "male": [
+        "prostatectomy",    # Prostate
+        "orchiectomy",      # Testicles
+        "vasectomy"         # Vas deferens
+    ],
+    "both": [
+        "mastectomy"
+    ]
+}
+
+POSTGRES_SQL_FETCH_SIZE: Final[int] = 100
+POSTGRES_MAX_PROCESSING_SIZE: Final[int] = 600
+POSTGRES_SQL_CURSOR_NAME: Final[str] = 'fetch_trials_cursor'
+DEFAULT_SPACY_MODEL: Final[str] = 'en_core_sci_sm'
 # Semantic Type Identifiers (TUIs) that are relevant to clinical trials
-TARGET_TUIS = {
+TARGET_TUIS: Final[dict] = {
     'T047': 'Disease', # Disease or Syndrome (e.g., asthma)
     'T121': 'Chemical', # Pharmacologic Substance (e.g., aspirin)
     'T061': 'Procedure', # Therapeutic or Preventive Procedure (e.g., abdominal surgery)
     'T033': 'Observation',  # Finding (e.g., body mass index, ASA score)
     'T074': 'Device' # Medical Device (e.g., PCA device, pacemaker)
 }
-SCISPACY_LINKER_NAME = 'scispacy_linker'
+SCISPACY_LINKER_NAME: Final[str] = 'scispacy_linker'
+CLINICAL_TRIALS_SEMANTIC_CRITERIA_TABLE_NAME: Final[str] = "clinical_trials_semantic_criteria"
+CRITERIA_BOOLEAN_EDGE_TYPES: Final[set] = {"REQUIRES_PREGNANCY", "REQUIRES_BIOLOGICAL_SEX"}
 
 class MODEL_PARAMS(Enum):
     LR = 0.001
