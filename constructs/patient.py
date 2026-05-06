@@ -12,7 +12,7 @@ class PATIENT_EDGE_TYPES(Enum):
     IS_PREGNANT = "IS_PREGNANT"
 
 class Patient:
-    def __init__(self, patient_graph):
+    def __init__(self, patient_edges):
         self.conditions = set()
         self.medications = set()
         self.age_months = None
@@ -20,10 +20,10 @@ class Patient:
         self.biological_sex = None 
         self.is_healthy = None
         self.is_pregnant = None
-        self.parse_graph(patient_graph)
+        self.parse_graph(patient_edges)
     
-    def parse_graph(self, patient_graph):
-        for edge in patient_graph:
+    def parse_graph(self, patient_edges):
+        for edge in patient_edges:
             edge_type, edge_text = edge['type'], edge['target']
             
             match edge_type:
