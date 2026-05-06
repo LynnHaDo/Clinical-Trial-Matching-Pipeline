@@ -1,13 +1,15 @@
 import argparse
 import json
 import os
+from rich.console import Console
+from rich.table import Table
 import psycopg2
 from scipy.spatial.distance import cosine
 from dotenv import load_dotenv
 from transformers import AutoModel, AutoTokenizer
 
 from clinical_trial_processor.constants import CLINICAL_TRIALS_SEMANTIC_CRITERIA_TABLE_NAME
-from constants import CLINICAL_BERT_MODEL_NAME, DATABASE_URL_KEY, MATCHING_DISTANCE_THRESHOLD
+from constants import CLINICAL_BERT_MODEL_NAME, DATABASE_URL_KEY, MATCHING_DISTANCE_THRESHOLD, MEDICAL_TRANSCRIPTIONS_TABLE_NAME
 from constructs.patient import Patient
 from utils import get_embedding
 
@@ -15,7 +17,7 @@ from utils import get_embedding
 # Set up arguments
 # ==========================================
 parser = argparse.ArgumentParser(description="This script sets up the database to embed clinical trials extracted into vectors.")
-parser.add_argument("input_patient_notes", help="Path to input patient notes")
+parser.add_argument("input_patient_notes", help="Path to input patient notes (list of ids) in .txt")
 parser.add_argument("--k", help="Number of trials suggested for each patient")
 
 args = parser.parse_args()
@@ -35,7 +37,7 @@ cur = conn.cursor()
 # Trials fetching
 # ==========================================
 
-def get_eligible_trials(cur, patient):
+def get_eligible_trials(cur, trial_ids, patient):
     # Parsing biological sex
     op_biological_sex_edge = json.dumps([{
         "type": "IGNORE"
@@ -76,8 +78,9 @@ def get_eligible_trials(cur, patient):
         FROM ctgov.eligibilities e
         LEFT JOIN {CLINICAL_TRIALS_SEMANTIC_CRITERIA_TABLE_NAME} c ON e.id = c.trial_id
         WHERE
+            e.nct_id = ANY(%s) 
             --- Strict demographic & Boolean filters
-            %s >= COALESCE(e.min_age_months, 0)
+            AND %s >= COALESCE(e.min_age_months, 0)
             AND %s <= COALESCE(e.max_age_months, 99999)
             AND (e.healthy_volunteers IS NULL OR e.healthy_volunteers = %s)
             AND (e.gender = 'ALL' OR e.gender = %s)
@@ -87,6 +90,7 @@ def get_eligible_trials(cur, patient):
     """
     
     cur.execute(query, (
+        trial_ids,
         patient.age_months,
         patient.age_months,
         patient.is_healthy,
@@ -96,6 +100,15 @@ def get_eligible_trials(cur, patient):
     ))
     
     return cur.fetchall()
+
+def get_trials_from_sample(filepath='trials.txt'):
+    try:
+        with open(filepath, 'r') as f:
+            target_ids = [line.strip() for line in f if line.strip()]
+            return target_ids
+    except FileNotFoundError:
+        print(f'Error: The file {filepath} was not found.')
+        return []
 
 # ==========================================
 # Matching calculations
@@ -114,7 +127,7 @@ def evaluate_criteria(category, patient_condition_vectors, c_vec, c_type, trial_
                     trial_data["score"] += 1 # REWARD! Patient has a required condition
                     break 
 
-def score_trials(eligible_trials, patient_condition_vectors, patient_med_vectors, patient_prior_procedures_vectors):
+def score_trials(eligible_trials, patient_condition_vectors, patient_med_vectors, k):
     trials = {}
     
     for row in eligible_trials:
@@ -148,15 +161,16 @@ def score_trials(eligible_trials, patient_condition_vectors, patient_med_vectors
             # Evaluate criteria
             evaluate_criteria('CONDITION', patient_condition_vectors, c_vec, c_type, trial_data)
             evaluate_criteria('CHEMICAL', patient_med_vectors, c_vec, c_type, trial_data)
-            evaluate_criteria('PROCEDURE', patient_prior_procedures_vectors, c_vec, c_type, trial_data)
-            evaluate_criteria('OBSERVATION', patient_condition_vectors, c_vec, c_type, trial_data)
-            evaluate_criteria('DEVICE', patient_condition_vectors, c_vec, c_type, trial_data)
+            # evaluate_criteria('PROCEDURE', patient_prior_procedures_vectors, c_vec, c_type, trial_data)
+            # evaluate_criteria('OBSERVATION', patient_condition_vectors, c_vec, c_type, trial_data)
+            # evaluate_criteria('DEVICE', patient_condition_vectors, c_vec, c_type, trial_data)
         
         if not trial_data['vetoed']:
             valid_trials.append(trial_data)
     
     valid_trials.sort(key=lambda x: x['score'], reverse=True)
-    return [(trial['nct_id'], trial['score']) for trial in valid_trials]
+    top_k = valid_trials[:k]
+    return [(trial['nct_id'], trial['score']) for trial in top_k]
 
 # ==========================================
 # Load model for input patient notes
@@ -164,32 +178,67 @@ def score_trials(eligible_trials, patient_condition_vectors, patient_med_vectors
 tokenizer = AutoTokenizer.from_pretrained(CLINICAL_BERT_MODEL_NAME)
 model = AutoModel.from_pretrained(CLINICAL_BERT_MODEL_NAME)
 
-PATIENTS = []
-
-with open(args.input_patient_notes, 'r') as file:
-    data = json.load(file)
+# ==========================================
+# Retrieve patient's extracted graph
+# ==========================================
+def get_patient_graph(patient_id, cur):
+    cur.execute(
+        f"SELECT extracted_graph FROM {MEDICAL_TRANSCRIPTIONS_TABLE_NAME} WHERE id = %s;",
+        (patient_id,)
+    )
+        
+    result = cur.fetchone()
+        
+    if result:
+        return result[0]
+    else:
+        print(f"No record found for ID: {patient_id}")
+        return None
     
-    for patient_id in data:
-        print(f'--- Patient {patient_id} ---')
-        patient = Patient(data[patient_id])
-        print(patient)
+# ==========================================
+# Prepare args
+# ==========================================
 
-        # Embed the Patient's Semantic Data
-        print("Embed the patient's semantic entities...")
-        patient_condition_vectors = [get_embedding(cond, tokenizer, model) for cond in patient.conditions]
-        patient_med_vectors = [get_embedding(med, tokenizer, model) for med in patient.medications]
-        #patient_prior_procedures_vectors = [get_embedding(med, tokenizer, model) for med in patient["prior_procedures"]]
-        print("Finish embedding the patient's semantic entities...")
+k = int(args.k) if args.k else 3
+trial_ids_sample = get_trials_from_sample()
 
-        # ==========================================
-        # Load eligible trials
-        # ==========================================
-        print("Load eligible trials...")
-        eligible_trials = get_eligible_trials(cur, patient)
-        print("Score eligible trials...")
-        valid_trials = score_trials(eligible_trials, patient_condition_vectors, patient_med_vectors, patient_condition_vectors)
-        print(f"--- Found {len(valid_trials)} valid trials ---")
-        print(valid_trials)
+# ==========================================
+# Initialize rich console for table formatting
+# ==========================================
+console = Console()
+table = Table(title="Clinical Trial Matching Results", show_header=True, header_style="bold magenta")
+table.add_column("Patient ID", style="cyan", width=12, justify="center")
+table.add_column("Matching Trials (ID, Score)", style="green")
 
+with console.status("[bold blue]Running patient matching pipeline...", spinner="dots"):
+    with open(args.input_patient_notes, 'r') as file:
+        for line in file:
+            patient_id = int(line.strip())
+            patient_graph = get_patient_graph(patient_id, cur)
+            if not patient_graph:
+                table.add_row(str(patient_id), "[red]Graph not found in DB[/red]")
+            patient_edges = patient_graph['edges']
+            patient = Patient(patient_edges)
 
+            # Embed the Patient's Semantic Data
+            patient_condition_vectors = [get_embedding(cond, tokenizer, model) for cond in patient.conditions]
+            patient_med_vectors = [get_embedding(med, tokenizer, model) for med in patient.medications]
 
+            # Load eligible trials
+            eligible_trials = get_eligible_trials(cur, trial_ids_sample, patient)
+            valid_trials = score_trials(eligible_trials, patient_condition_vectors, patient_med_vectors, k)
+            if valid_trials:
+                trials_str = "\n".join([f"{nct} (Score: {score})" for nct, score in valid_trials])
+            else:
+                trials_str = "[yellow]No eligible trials found[/yellow]"
+            
+            table.add_row(str(patient_id), trials_str)
+
+# ==========================================
+# Print result
+# ==========================================
+console.print('\n')
+console.print(table)
+
+cur.close()
+conn.close()
