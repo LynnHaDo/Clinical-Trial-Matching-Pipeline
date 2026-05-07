@@ -44,3 +44,8 @@ tzdata==2026.1
 urllib3==2.6.3
 xxhash==3.6.0
 yarl==1.22.0
+pyspark==3.5.1
+python-dotenv==1.0.0
+spark-nlp==6.3.2
+numpy
+medspacy
