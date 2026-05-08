@@ -2,6 +2,7 @@ keys/
 .DS_Store
 clinical-trial-processor/datasets
 datasets/
+models/
 *.csv
 *.gz
 *.json
