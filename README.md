@@ -127,10 +127,10 @@ Clinical Trial Matching Results
 │     2849     │ No eligible trials found    │
 │     289      │ No eligible trials found    │
 │     865      │ No eligible trials found    │
-│     321      │ NCT03952533 (Score: 1)      │
+│     321      │ NCT03952533 (Score: 3)      │
 │              │ NCT05386472 (Score: 0)      │
 │              │ NCT06814652 (Score: 0)      │
-│     2449     │ NCT03952533 (Score: 1)      │
+│     2449     │ NCT03952533 (Score: 7)      │
 │              │ NCT04240392 (Score: 1)      │
 │              │ NCT06814652 (Score: 0)      │
 │     2064     │ No eligible trials found    │
@@ -149,7 +149,7 @@ Clinical Trial Matching Results
 │              │ NCT04833530 (Score: 0)      │
 │              │ NCT07222306 (Score: 0)      │
 │     4431     │ No eligible trials found    │
-│     4349     │ NCT03952533 (Score: 1)      │
+│     4349     │ NCT03952533 (Score: 4)      │
 │              │ NCT03281031 (Score: 0)      │
 │              │ NCT05386472 (Score: 0)      │
 │     854      │ No eligible trials found    │
