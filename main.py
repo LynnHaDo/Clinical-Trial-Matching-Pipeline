@@ -125,7 +125,6 @@ def evaluate_criteria(category, patient_condition_vectors, c_vec, c_type, trial_
                     break
                 elif c_type == f'REQUIRES_{category}':
                     trial_data["score"] += 1 # REWARD! Patient has a required condition
-                    break 
 
 def score_trials(eligible_trials, patient_condition_vectors, patient_med_vectors, k):
     trials = {}
