@@ -26,7 +26,7 @@ df_raw = pd.read_sql("SELECT * FROM patients_raw.notes;", engine)
 
 print("Running NLP extraction...")
 extracted_records = []
-data_tuples = list(zip(df_raw['transcription'].astype(str), df_raw.index))
+data_tuples = list(zip(df_raw['transcription'].astype(str), df_raw['Unnamed: 0']))
 
 for doc, note_id in nlp.pipe(tqdm(data_tuples, desc="Processing patient notes"), as_tuples=True, batch_size=50):  
     
