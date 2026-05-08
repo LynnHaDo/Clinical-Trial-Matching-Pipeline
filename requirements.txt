@@ -103,3 +103,8 @@ weasel==0.4.3
 wrapt==2.1.2
 xxhash==3.6.0
 yarl==1.22.0
+pyspark==3.5.1
+python-dotenv==1.0.0
+spark-nlp==6.3.2
+numpy
+medspacy
