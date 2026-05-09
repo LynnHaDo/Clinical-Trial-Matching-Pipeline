@@ -66,6 +66,20 @@ python3 -m clinical_trial_processor.process
 python3 -m clinical_trial_processor.embed
 ```
 
+### Medical Transcriptions Extraction
+1. Load dataset
+```
+python3 medical-transcription-processor/load_mtsamples.py
+```
+2. Write transformed notes to database
+```
+python3 medical-transcription-processor/transform_notes.py
+```
+3. Evaluation
+```
+python3 medical-transcription-processor/transform_evaluation.py
+```
+
 ## Run the matching algorithm
 
 Select the ids of medical transcriptions from mtsamples' table and put it in `transcriptions.txt`. The trials to be selected from are in `trials.txt`.
